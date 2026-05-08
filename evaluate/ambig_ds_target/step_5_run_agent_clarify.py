@@ -119,16 +119,32 @@ directly with the modeling task as instructed above.
 
 # --------------------------------------------------------------------------- #
 def _load_task_manifest(benchmark_dir: Path, slug: str) -> dict | None:
-    """Per-task decoy manifest (true_target_column, original_target_name, ...)."""
+    """Per-task decoy manifest (true_target_column, original_target_name, ...).
+
+    Prefers the rebuilt ambig manifest (flat schema).  Falls back to the HF
+    release manifest (restructured schema) and normalises the keys so that
+    callers can always access ``manifest["true_target_column"]``.
+    """
     for cand in [
         benchmark_dir / "data" / slug / "ambig" / "_manifest.json",
         benchmark_dir / "release" / "tasks" / slug / "_manifest.json",
     ]:
         if cand.exists():
             try:
-                return json.loads(cand.read_text())
+                m = json.loads(cand.read_text())
             except Exception:
                 continue
+            # Normalise restructured HF release schema → flat keys.
+            if "task" in m and isinstance(m["task"], dict):
+                t = m["task"]
+                m.setdefault("true_target_column",
+                             t.get("true_target_column_in_ambig"))
+                m.setdefault("decoy_column",
+                             t.get("decoy_column_in_ambig"))
+                m.setdefault("original_target_name",
+                             t.get("original_target_name"))
+                m.setdefault("target_type", t.get("task_type"))
+            return m
     return None
 
 
