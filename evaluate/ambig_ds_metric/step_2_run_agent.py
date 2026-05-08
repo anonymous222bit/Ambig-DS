@@ -181,9 +181,11 @@ def submission_shape(sub_path: Path, slug: str, registry) -> dict:
 
 def grade(sub_path: Path, slug: str, registry) -> dict:
     """Grade a submission CSV against held-out ground truth."""
+    from fetch_leaderboards import ensure_leaderboard
     from mlebench.grade import grade_csv
 
     try:
+        ensure_leaderboard(slug)
         comp = registry.get_competition(slug)
         report = grade_csv(sub_path, comp)
     except Exception as e:

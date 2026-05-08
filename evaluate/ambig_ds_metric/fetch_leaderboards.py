@@ -50,6 +50,19 @@ def needs_fetch(slug: str) -> tuple[bool, int]:
     return sz < MIN_VALID_BYTES, sz
 
 
+def ensure_leaderboard(slug: str) -> None:
+    """If the leaderboard CSV for *slug* is missing or is an LFS stub, fetch it.
+
+    Call this before ``mlebench.grade.grade_csv`` so grading never fails
+    just because Git LFS was unavailable at install time.
+    """
+    need, _ = needs_fetch(slug)
+    if need:
+        ok, msg = fetch_one(slug)
+        if not ok:
+            raise RuntimeError(f"Cannot fetch leaderboard for {slug}: {msg}")
+
+
 def fetch_one(slug: str) -> tuple[bool, str]:
     out = COMPS_DIR / slug / "leaderboard.csv"
     out.parent.mkdir(parents=True, exist_ok=True)

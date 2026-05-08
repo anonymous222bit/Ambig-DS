@@ -30,9 +30,11 @@ def get_registry(data_dir: Path):
 
 def grade_one(sub_path: Path, slug: str, registry) -> dict:
     """Grade a submission CSV. Returns dict with score, valid_submission, above_median, any_medal."""
+    from fetch_leaderboards import ensure_leaderboard
     from mlebench.grade import grade_csv
 
     try:
+        ensure_leaderboard(slug)
         comp = registry.get_competition(slug)
         report = grade_csv(sub_path, comp)
     except Exception as e:
