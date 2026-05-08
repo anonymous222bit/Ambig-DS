@@ -42,9 +42,10 @@ create_datasets/ambig_ds_metric/
 | 3    | `<bench>/prompts/<slug>/{full,ambig_metric}.md` + manifest | `<bench>/_verify/<slug>.json`, `_summary.json`, `rejected.txt`                         |
 | 4    | `<bench>/` (everything except `data/`) + `_verify/`        | local staging dir + `https://huggingface.co/datasets/<repo-id>` (when `--upload`)      |
 
-`<bench>` is the working benchmark directory (e.g. `./benchmark`). It is
-created during evaluation (Step 1 of the eval pipeline pulls the prompts
-from HuggingFace) and is **not** rebuilt by this side of the pipeline.
+`<bench>` is the working benchmark directory created by
+`evaluate/ambig_ds_metric/step_1_setup_benchmark.py` (Step 1 of the eval
+pipeline pulls the prompts from HuggingFace). From this directory, that
+is `../../evaluate/ambig_ds_metric/benchmark`.
 
 ---
 
@@ -73,7 +74,7 @@ mention of the evaluation metric while preserving every other detail.
 
 ```bash
 python pipeline/step_1_generate_ambig_prompts.py \
-    --benchmark-dir ../benchmark \
+    --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark \
     --run \
     --model gpt-4o
 ```
@@ -108,7 +109,7 @@ hints, residual formulas, neutral-sentence sanity, length sanity, and
 eval-section structure.
 
 ```bash
-python pipeline/step_2_audit_prompts.py --benchmark-dir ../benchmark
+python pipeline/step_2_audit_prompts.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
 ```
 
 Exits non-zero on any CRITICAL finding. Use this as a CI gate before
@@ -145,7 +146,7 @@ LLM judge that applies the paper's four-item retention checklist
 4. **Task preserved** — only metric-related information was removed.
 
 ```bash
-python pipeline/step_3_llm_verify.py --benchmark-dir ../benchmark --run
+python pipeline/step_3_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
 ```
 
 For each slug the judge produces strict JSON with per-check pass/fail,
@@ -174,11 +175,11 @@ dataset repo.
 
 ```bash
 # Dry-run (stage only, do not push)
-python pipeline/step_4_upload_to_hf.py --benchmark-dir ../benchmark
+python pipeline/step_4_upload_to_hf.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
 
 # Stage + push
 python pipeline/step_4_upload_to_hf.py \
-    --benchmark-dir ../benchmark \
+    --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark \
     --upload \
     --repo-id <your-org>/Ambig-DS-M
 ```
@@ -207,10 +208,10 @@ byte-identically, use:
 
 ```bash
 export AMBIG_LLM_MODEL=anthropic_claude_opus_4_7   # model used for the release
-python pipeline/step_1_generate_ambig_prompts.py --benchmark-dir ../benchmark --run
-python pipeline/step_2_audit_prompts.py            --benchmark-dir ../benchmark
-python pipeline/step_3_llm_verify.py               --benchmark-dir ../benchmark --run
-python pipeline/step_4_upload_to_hf.py             --benchmark-dir ../benchmark
+python pipeline/step_1_generate_ambig_prompts.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
+python pipeline/step_2_audit_prompts.py            --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
+python pipeline/step_3_llm_verify.py               --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
+python pipeline/step_4_upload_to_hf.py             --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
 ```
 
 Two LLM-determined details that may vary run-to-run (sampler / model drift):
