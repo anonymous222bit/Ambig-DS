@@ -3,14 +3,14 @@
 
 This is the main entry point for running experiments. It:
   1. Builds a workspace per task (symlinks data, creates task.md from prompt)
-  2. Runs an LLM-powered coding agent (claw) in the workspace
+  2. Runs an LLM-powered coding agent (claw or opencode) in the workspace
   3. Locates the agent's submission CSV
   4. Grades it against the held-out ground truth via MLE-bench
 
 Prerequisites:
   - Run step_1_setup_benchmark.py first to download prompts + data
   - Set OPENAI_API_KEY (or pass --api-key)
-  - claw binary on PATH or pass --claw-bin
+  - Agent binary on PATH or pass --agent-bin
 
 Usage:
     # Full prompts, all tasks
@@ -101,13 +101,13 @@ def build_workspace(
             (ws_data / entry.name).symlink_to(entry.resolve())
 
     # task.md = prompt + submission instructions
-    submission_path = ws / SUBMISSION_NAME
     footer = (
         f"\n\n---\n\n"
         f"## Task instructions\n\n"
         f"You are a data scientist. The dataset for this competition is in `./data/`.\n"
-        f"Build a model and write your predictions to `{submission_path}` "
-        f"(absolute path). Do not write anything else outside the current working directory."
+        f"Build a model and write your predictions to `./{SUBMISSION_NAME}` "
+        f"(in the current working directory). Do not write anything else outside "
+        f"the current working directory."
     )
     prompt_text = prompt_file.read_text() + footer
     (ws / "task.md").write_text(prompt_text)
@@ -116,7 +116,6 @@ def build_workspace(
         "slug": slug, "variant": variant,
         "prompt_source": str(prompt_file),
         "data_source": str(src_public),
-        "submission_path": str(submission_path),
         "built_at": datetime.now().isoformat(),
     }, indent=2))
 
@@ -138,11 +137,14 @@ def run_agent(agent: str, bin_path: str, model: str, prompt: str, cwd: Path,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Session recovery (when claw times out)
+# Session recovery (when the agent times out)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def recover_from_session(workspace: Path) -> dict:
-    """Parse claw's session jsonl to recover iteration count + token usage."""
+    """Parse claw's session JSONL to recover iteration count + token usage.
+
+    Only applicable when --agent claw; opencode does not write .claw/ sessions.
+    """
     out = {
         "session_path": None, "n_messages": 0, "n_assistant": 0,
         "n_tool_uses": 0, "input_tokens": 0, "output_tokens": 0,

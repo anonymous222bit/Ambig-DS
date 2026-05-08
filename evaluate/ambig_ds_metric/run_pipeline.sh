@@ -4,7 +4,7 @@
 # This script demonstrates the full workflow:
 #   1. Setup    : download HF prompts + Kaggle competition data
 #   2. Generate : (optional) re-generate ambig_metric.md prompts with an LLM
-#   3. Audit    : verify all redacted prompts are clean of metric leaks
+#   3. Audit    : (optional) verify all redacted prompts are clean of metric leaks
 #   4. Run      : execute an LLM agent on full + ambig_metric variants
 #   5. Judge    : (optional) LLM-classify what metric the agent optimized
 #
@@ -62,13 +62,18 @@ fi
 # echo "[2/5] Generating ambiguous prompts with LLM..."
 # "$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_1_generate_ambig_prompts.py" --benchmark-dir "$BENCH_DIR" --run
 
-# ── Step 3: Audit redacted prompts ────────────────────────────
-echo
-echo "[3/5] Auditing prompts for metric leaks..."
-"$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_2_audit_prompts.py" --benchmark-dir "$BENCH_DIR" || {
-  echo "WARNING: audit found issues. Continue? (Ctrl-C to abort, Enter to proceed)"
-  read -r _
-}
+# ── Step 3: (optional) Audit redacted prompts ─────────────────
+# The HF-shipped prompts use a different neutral-sentence format than the
+# auditor expects, so this gate fails on most tasks. The audit is designed
+# for the dataset-creation workflow; uncomment only if you regenerated
+# prompts in Step 2 above.
+#
+# echo
+# echo "[3/5] Auditing prompts for metric leaks..."
+# "$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_2_audit_prompts.py" --benchmark-dir "$BENCH_DIR" || {
+#   echo "WARNING: audit found issues. Continue? (Ctrl-C to abort, Enter to proceed)"
+#   read -r _
+# }
 
 # ── Step 4: Run agent on both variants ────────────────────────
 echo

@@ -41,8 +41,6 @@ underneath it.
 ├── README.md                                      from HuggingFace
 ├── task_list.txt                                  from HuggingFace
 ├── metric_manifest.json                           from HuggingFace (true metric metadata)
-├── metrics_classified.csv                         from HuggingFace
-├── edits_log.md                                   from HuggingFace
 ├── prompts/<slug>/{full,ambig_metric}.md          from HuggingFace
 │
 ├── data/<slug>/prepared/                          from `mlebench prepare` (Kaggle)
@@ -77,8 +75,11 @@ with `--run-name`.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install openai>=1.0 huggingface_hub>=0.24 pandas>=2.0 py7zr
-pip install -e git+https://github.com/openai/mle-bench.git#egg=mlebench
+GIT_LFS_SKIP_SMUDGE=1 pip install -e git+https://github.com/openai/mle-bench.git#egg=mlebench
 ```
+
+> **Note.** `GIT_LFS_SKIP_SMUDGE=1` skips large LFS files during clone;
+> the bundled `fetch_leaderboards.py` downloads them on demand instead.
 
 ### 2. Kaggle credentials
 
@@ -89,6 +90,26 @@ chmod 600 ~/.kaggle/kaggle.json
 
 You must accept each competition's rules on kaggle.com before
 `mlebench prepare` will download its data (otherwise it returns 403).
+
+### 2b. Corporate TLS proxy (Zscaler etc.)
+
+If Kaggle, pip, or HuggingFace requests fail with
+`[SSL: CERTIFICATE_VERIFY_FAILED]`, your traffic is being intercepted by a
+corporate proxy. Append the proxy's root CA to certifi and export the
+envvars that `requests` / `kaggle` / `urllib` honour:
+
+```bash
+# Append proxy CA to certifi's bundle (re-run after certifi upgrades)
+security find-certificate -a -p -c "Zscaler" /Library/Keychains/System.keychain \
+  >> "$(python -c 'import certifi; print(certifi.where())')"
+
+# Tell Python libraries to use the patched bundle
+export SSL_CERT_FILE="$(python -c 'import certifi; print(certifi.where())')"
+export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
+```
+
+(Substitute the proxy name if not Zscaler. Add the `export` lines to
+your `~/.zshrc` or `~/.bashrc` to persist them.)
 
 ### 3. LLM API access
 
@@ -131,19 +152,15 @@ python step_1_setup_benchmark.py --benchmark-dir ./benchmark
 | `--tasks slug1,slug2` | Only prepare these slugs (saves disk).                                  |
 | `--verify-only`       | Re-run verification without downloading.                                |
 | `--hf-repo other/x`   | Pull from a fork of the HF dataset.                                     |
-| `--keep-all-82`       | Disable the 61-task eval-scope filter; keep all tasks from HF.          |
 
 **Reads:** the HuggingFace dataset + Kaggle (per-task).
 **Writes:** `<bench>/{prompts,data,task_list.txt,metric_manifest.json,…}`.
 
 #### Eval scope (61 tasks)
 
-After HF download, `task_list.txt` is rewritten to the 61-task evaluation
-scope. The excluded slugs are listed in `EXCLUDED_TASKS` in
-`step_1_setup_benchmark.py`. Pass `--keep-all-82` to disable the filter.
-
-Downstream steps (2/3/4) read `task_list.txt`, so they automatically
-operate on the 61 without any extra flag.
+The HF dataset ships exactly 61 competitions. `task_list.txt` lists all
+of them. Downstream steps (2/3/4) read `task_list.txt`, so they
+automatically operate on the full set without any extra flag.
 
 > **Disk note.** Full 61-task Kaggle data is ~63 GB downloaded and
 > ~150–200 GB after `mlebench prepare` extracts and resplits.

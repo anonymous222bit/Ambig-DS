@@ -98,6 +98,17 @@ _OPENCODE_CONFIG_TEMPLATE = {
 }
 
 
+def _format_cost(total_cost: float, input_tokens: int, output_tokens: int) -> str:
+    """Return a cost string, or \"\" if no cost data is available."""
+    if total_cost > 0:
+        return f"{total_cost:.6f}"
+    if input_tokens > 0 or output_tokens > 0:
+        # Rough estimate at $3/$15 per 1M tokens (a common mid-tier rate).
+        est = input_tokens * 3.0 / 1_000_000 + output_tokens * 15.0 / 1_000_000
+        return f"~{est:.6f}"
+    return ""
+
+
 def _write_opencode_config(cwd: Path, model_id: str) -> Path:
     cfg = json.loads(json.dumps(_OPENCODE_CONFIG_TEMPLATE))  # deep copy
     cfg["provider"]["custom"]["models"][model_id] = {
@@ -155,6 +166,8 @@ def run_opencode(
         tool_uses: list[dict] = []
         n_assistant_steps = 0
         total_cost = 0.0
+        total_input_tokens = 0
+        total_output_tokens = 0
         for line in stdout.splitlines():
             line = line.strip()
             if not line.startswith("{"):
@@ -184,12 +197,20 @@ def run_opencode(
                 c = part.get("cost")
                 if isinstance(c, (int, float)):
                     total_cost += float(c)
+                # Accumulate token usage for cost estimation when cost is
+                # not reported directly (common with gateway providers).
+                usage = part.get("usage") or {}
+                total_input_tokens += int(usage.get("input_tokens") or
+                                          usage.get("prompt_tokens") or 0)
+                total_output_tokens += int(usage.get("output_tokens") or
+                                           usage.get("completion_tokens") or 0)
         message = "".join(message_parts).strip()
+        cost_str = _format_cost(total_cost, total_input_tokens, total_output_tokens)
         if not message and result.returncode != 0:
-            return f"ERROR (exit {result.returncode}): {stderr[-500:]}", tool_uses, n_assistant_steps, f"{total_cost:.6f}"
+            return f"ERROR (exit {result.returncode}): {stderr[-500:]}", tool_uses, n_assistant_steps, cost_str
         if not message:
-            return f"ERROR: no text in opencode output: {stdout[-300:]}", tool_uses, n_assistant_steps, f"{total_cost:.6f}"
-        return message, tool_uses, n_assistant_steps, f"{total_cost:.6f}"
+            return f"ERROR: no text in opencode output: {stdout[-300:]}", tool_uses, n_assistant_steps, cost_str
+        return message, tool_uses, n_assistant_steps, cost_str
     except subprocess.TimeoutExpired as e:
         partial = (e.stdout or "")[-3000:] if isinstance(e.stdout, str) else ""
         return f"ERROR: timeout\n{partial}", [], 0, ""
@@ -221,4 +242,8 @@ def run_agent(
 
 
 def default_bin(agent: str) -> str:
+    if agent == "opencode":
+        candidate = Path.home() / ".npm-global" / "bin" / "opencode"
+        if candidate.is_file():
+            return str(candidate)
     return {"claw": "claw", "opencode": "opencode"}[agent]

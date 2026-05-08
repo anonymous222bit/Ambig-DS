@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the Ambig-DS-M benchmark WITH one-turn clarification.
 
-Per (slug, variant) we run claw in three phases:
+Per (slug, variant) we run the coding agent in three phases:
   Phase A (ASK):   agent gets the prompt + a clarify-protocol footer telling
                    it to write ONE question (or `NONE`) to ./_question.txt and
                    stop. Submission instructions are suppressed.
@@ -15,7 +15,7 @@ Per (slug, variant) we run claw in three phases:
 Prerequisites:
   - Run step_1_setup_benchmark.py first to download prompts + data
   - Set OPENAI_API_KEY (or pass --api-key)
-  - claw binary on PATH or pass --claw-bin
+  - Agent binary on PATH or pass --agent-bin
 
 Usage:
     python step_3_run_agent_clarify.py --benchmark-dir ./benchmark \\

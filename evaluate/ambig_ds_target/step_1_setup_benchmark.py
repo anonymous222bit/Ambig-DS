@@ -71,8 +71,6 @@ import json
 import os
 import shutil
 import sys
-import tempfile
-from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
@@ -209,128 +207,195 @@ def copy_full_csvs(slug: str, dsbench_root: Path, benchmark_dir: Path) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+def _parse_release_manifest(manifest: dict) -> dict:
+    """Normalise both HF-release (restructured) and legacy (flat) manifest
+    schemas into a uniform dict with the fields the rebuild needs."""
+    if "task" in manifest and "ambig_recipe" in manifest:
+        task_blk = manifest["task"]
+        recipe_blk = manifest["ambig_recipe"]
+        return {
+            "original_target": task_blk["original_target_name"],
+            "target_type": task_blk["task_type"],
+            "n_train": task_blk["n_train"],
+            "n_test": task_blk["n_test"],
+            "n_features": task_blk["n_features"],
+            "id_column": task_blk.get("id_column", "id"),
+            "true_target_column": task_blk["true_target_column_in_ambig"],
+            "decoy_column": task_blk["decoy_column_in_ambig"],
+            "feature_map": recipe_blk["feature_map"],
+            "anon_feature_columns": recipe_blk["anon_feature_columns"],
+            "noise_cls": recipe_blk["noise_classification_frac"],
+            "noise_reg": recipe_blk["noise_regression_sigma_frac"],
+            "decoy_seed": recipe_blk["seeds"]["decoy"],
+            "method": recipe_blk["method"],
+        }
+    # Legacy flat schema (from pipeline_DSBench direct output).
+    return {
+        "original_target": manifest["original_target_name"],
+        "target_type": manifest["target_type"],
+        "n_train": manifest["n_train"],
+        "n_test": manifest["n_test"],
+        "n_features": manifest["n_features"],
+        "id_column": manifest.get("id_column", "id"),
+        "true_target_column": manifest["true_target_column"],
+        "decoy_column": manifest["decoy_column"],
+        "feature_map": manifest["feature_map"],
+        "anon_feature_columns": manifest["anon_feature_columns"],
+        "noise_cls": manifest["noise_classification_frac"],
+        "noise_reg": manifest["noise_regression_sigma_frac"],
+        "decoy_seed": manifest["seeds"]["decoy"],
+        "method": manifest.get("decoy_method", ""),
+    }
+
+
 def rebuild_ambig_csvs(slug: str, release: Path, dsbench_root: Path,
                        benchmark_dir: Path, decoy_mod) -> bool:
-    """Re-derive the ambig CSVs deterministically from the manifest recipe.
+    """Deterministically rebuild ambig CSVs using the release manifest.
 
-    We synthesise a one-row spec CSV plus an argparse Namespace mirroring
-    the original pipeline_DSBench/step_1_generate_decoy.py invocation, then
-    call its process_task() so the implementation lives in exactly one place.
+    Instead of calling process_task() (which derives its own RNG state and
+    may produce different val_1/val_2 assignments), this function reads the
+    exact decoy seed, feature map, and column assignment recorded in the
+    release manifest and calls the low-level decoy helpers directly.  This
+    guarantees the rebuilt data matches the HF release exactly.
     """
     manifest_p = release / "tasks" / slug / "_manifest.json"
     if not manifest_p.exists():
         print(f"  [{slug}] AMBIG: manifest missing in release ({manifest_p})")
         return False
-    manifest = json.loads(manifest_p.read_text())
+    manifest_raw = json.loads(manifest_p.read_text())
+    m = _parse_release_manifest(manifest_raw)
 
-    # The HF release uses the PUBLIC restructured schema (task / ambig_recipe /
-    # diagnostics). The legacy raw schema (flat keys at top level) is also
-    # supported as a fallback for direct re-use of pipeline_DSBench output.
-    if "task" in manifest and "ambig_recipe" in manifest:
-        task_blk = manifest["task"]
-        recipe_blk = manifest["ambig_recipe"]
-        original_target = task_blk["original_target_name"]
-        target_type = task_blk["task_type"]
-        n_train = task_blk["n_train"]
-        n_test = task_blk["n_test"]
-        n_features = task_blk["n_features"]
-        noise_cls = recipe_blk["noise_classification_frac"]
-        noise_reg = recipe_blk["noise_regression_sigma_frac"]
-        seed_master = recipe_blk["seeds"]["master"]
-        decoy_method = recipe_blk["method"]
-    else:
-        original_target = manifest["original_target_name"]
-        target_type = manifest["target_type"]
-        n_train = manifest["n_train"]
-        n_test = manifest["n_test"]
-        n_features = manifest["n_features"]
-        noise_cls = manifest["noise_classification_frac"]
-        noise_reg = manifest["noise_regression_sigma_frac"]
-        seed_master = manifest["seeds"]["master"]
-        decoy_method = manifest.get("decoy_method", "")
-
-    # Where the ambig CSVs will end up (process_task writes <out_root>/data/<slug>/).
     ambig_out = benchmark_dir / "data" / slug / "ambig"
     train_dst = ambig_out / "train.csv"
     test_dst = ambig_out / "test.csv"
     if train_dst.exists() and test_dst.exists():
         return True
 
-    # Synthesise the per-task row that process_task expects.
-    row = pd.Series({
-        "task": slug,
-        "target_name": original_target,
-        "target_type": target_type,
-        "n_unique": 0,  # only used for logging
-        "n_train": n_train,
-        "n_test": n_test,
-        "n_features": n_features,
-        "modality": "tabular",
-        "group": "hf_release",
-        "notes": "",
-    })
+    # ---- read upstream full data ----------------------------------------
+    src = dsbench_root / "data_resplit" / slug
+    if not src.exists():
+        print(f"  [{slug}] AMBIG: upstream data missing ({src})")
+        return False
+    train = pd.read_csv(src / "train.csv", low_memory=False,
+                        nrows=m["n_train"] or None)
+    test = pd.read_csv(src / "test.csv", low_memory=False)
 
-    # process_task reads from <args.src_data_root>/<task>/{train,test}.csv
-    # and writes to <args.out_root>/data/<task>/...  (note the extra "data/").
-    # We point at a per-call tempdir, then move the produced files to
-    # <bench>/data/<slug>/ambig/ so the layout the rest of the evaluator
-    # expects is preserved.
-    cal = manifest.get("calibration", {})
-    tmp_out = tempfile.mkdtemp(prefix=f"ambig_rebuild_{slug}_")
-    args = Namespace(
-        src_data_root=str(dsbench_root / "data_resplit"),
-        out_root=tmp_out,
-        seed=seed_master,
-        noise_classification=noise_cls,
-        noise_regression=noise_reg,
-        cv_tolerance=cal.get("cv_tolerance", 0.02),
-        bisection_steps=cal.get("bisection_steps", 12),
-        max_noise=cal.get("max_noise", 0.80),
-        apply_dtype_snap=("dtype_match" in decoy_method),
-        pool_min=3,
-        pool_max=8,
-        pool_frac=0.6,
-        # Paper Sec 4.2 correlation filter (see step_1_generate_decoy.py).
-        # Disabled here (cap=1.0) because re-derivation must reproduce the
-        # exact decoy that the manifest's recorded seed produced; resampling
-        # would diverge. Filter belongs to BUILD time, not REBUILD time.
-        max_abs_correlation=1.0,
-        corr_filter_seeds=0,
-        max_cv_rows=20000,
-        # Re-derivation MUST use the same train-row count the manifest was
-        # built with, otherwise the recorded seed produces a different
-        # decoy permutation. n_train comes from the manifest's task block.
-        max_train_rows=int(n_train),
-        unlearnable_truth_threshold=cal.get(
-            "unlearnable_truth_threshold", 0.10),
-    )
-    master_rng = np.random.default_rng(args.seed)
-
-    try:
-        decoy_mod.process_task(row, args, master_rng)
-    except Exception as e:
-        print(f"  [{slug}] AMBIG: rebuild FAILED: {e}")
-        shutil.rmtree(tmp_out, ignore_errors=True)
+    original_target = m["original_target"]
+    if original_target not in train.columns:
+        print(f"  [{slug}] AMBIG: target {original_target!r} not in train columns")
         return False
 
-    # process_task writes to <out_root>/data/<task>/.
-    written = Path(tmp_out) / "data" / slug
-    train_src = written / "train.csv"
-    test_src = written / "test.csv"
-    sub_src = written / "sample_submission.csv"
-    man_src = written / "_manifest.json"
-    if not train_src.exists():
-        print(f"  [{slug}] AMBIG: process_task did not produce train.csv at {train_src}")
-        shutil.rmtree(tmp_out, ignore_errors=True)
-        return False
+    feature_map = m["feature_map"]       # {orig_col: anon_col}
+    anon_feat_cols = m["anon_feature_columns"]
+    feat_cols = [orig for orig, _anon in feature_map.items()]
+    idcol = m["id_column"]
+    target_type = m["target_type"].strip().lower()
+    decoy_seed = m["decoy_seed"]
+    truth_col = m["true_target_column"]  # val_1 or val_2
+    decoy_col = m["decoy_column"]        # the other one
+
+    # ---- encode train features for decoy construction -------------------
+    X_tr_num = decoy_mod.encode_train_for_model(train, feat_cols)
+    y_tr = train[original_target].values
+
+    # ---- detect unlearnable-truth case ----------------------------------
+    # When cv_true < threshold the original pipeline used a random
+    # permutation of the truth instead of the rank-mapped decoy.
+    diag = manifest_raw.get("diagnostics", {})
+    cv_true = diag.get("cv_true")
+    unlearnable = (cv_true is not None and not np.isnan(cv_true)
+                   and cv_true < 0.10)
+
+    # ---- build decoy using the exact recorded seed ----------------------
+    if unlearnable:
+        rng_perm = np.random.default_rng(decoy_seed)
+        val_2_raw = np.asarray(y_tr).copy()
+        rng_perm.shuffle(val_2_raw)
+    else:
+        val_2_raw, _pool_idx, _pool_corrs = decoy_mod.build_decoy(
+            X_tr_num, y_tr, target_type=target_type, seed=decoy_seed,
+            pool_min=3, pool_max=8, low_corr_pool_frac=0.6,
+        )
+
+    # ---- apply noise (same method the release was built with) -----------
+    fallback_noise = (m["noise_cls"] if target_type == "classification"
+                      else m["noise_reg"])
+    if "calibrated" in m["method"]:
+        # Re-run the same bisection the original build used; deterministic
+        # given identical (val_2_raw, X_tr_num, y_tr, decoy_seed).
+        calibrated_v2, _cal_level, _cal_cv, _trace = decoy_mod.calibrate_noise(
+            val_2_raw, X_tr_num, y_tr, target_type=target_type,
+            seed=decoy_seed, cv_true=cv_true,
+            cv_tolerance=0.02, max_cv_rows=20_000,
+            n_steps=12, lo=0.0, hi=0.50,
+        )
+        val_2 = calibrated_v2 if calibrated_v2 is not None else (
+            decoy_mod.add_label_noise_classification(val_2_raw, fallback_noise, decoy_seed)
+            if target_type == "classification"
+            else decoy_mod.add_label_noise_regression(val_2_raw, fallback_noise, decoy_seed)
+        )
+    elif target_type == "classification":
+        val_2 = decoy_mod.add_label_noise_classification(
+            val_2_raw, fallback_noise, decoy_seed)
+    else:
+        val_2 = decoy_mod.add_label_noise_regression(
+            val_2_raw, fallback_noise, decoy_seed)
+
+    # ---- optional dtype snap (only if the build method included it) -----
+    if "dtype_match" in m["method"]:
+        val_2 = decoy_mod.snap_to_truth_dtype(val_2, y_tr, target_type)
+
+    # ---- assemble output frames -----------------------------------------
+    # If the id column doesn't exist in the upstream data, fabricate it
+    # (matching what process_task does for datasets without a natural id).
+    if idcol in train.columns:
+        train_ids = train[idcol].values
+    else:
+        train_ids = np.arange(len(train))
+    if idcol in test.columns:
+        test_ids = test[idcol].values
+    else:
+        test_ids = np.arange(len(test))
+
+    out_train = pd.DataFrame({idcol: train_ids})
+    for orig, anon in feature_map.items():
+        out_train[anon] = train[orig].values
+    out_train[truth_col] = y_tr
+    out_train[decoy_col] = val_2
+    out_train = out_train[[idcol] + anon_feat_cols + ["val_1", "val_2"]]
+
+    out_test = pd.DataFrame({idcol: test_ids})
+    for orig, anon in feature_map.items():
+        out_test[anon] = test[orig].values
+    out_test = out_test[[idcol] + anon_feat_cols]
+
+    # ---- write ----------------------------------------------------------
     ambig_out.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(train_src), train_dst)
-    shutil.move(str(test_src), test_dst)
-    if sub_src.exists():
-        shutil.move(str(sub_src), ambig_out / "sample_submission.csv")
-    if man_src.exists():
-        shutil.move(str(man_src), ambig_out / "_manifest.json")
-    shutil.rmtree(tmp_out, ignore_errors=True)
+    out_train.to_csv(train_dst, index=False)
+    out_test.to_csv(test_dst, index=False)
+
+    # Write a flat manifest consistent with what step_5 / step_7 expect.
+    local_manifest = {
+        "task": slug,
+        "true_target_column": truth_col,
+        "decoy_column": decoy_col,
+        "original_target_name": original_target,
+        "target_type": target_type,
+        "id_column": idcol,
+        "n_train": int(len(train)),
+        "n_test": int(len(test)),
+        "n_features": len(feat_cols),
+        "feature_map": feature_map,
+        "anon_feature_columns": anon_feat_cols,
+        "decoy_method": m["method"],
+        "noise_classification_frac": m["noise_cls"],
+        "noise_regression_sigma_frac": m["noise_reg"],
+        "seeds": {"master": manifest_raw.get("ambig_recipe", manifest_raw)
+                  .get("seeds", {}).get("master", 0),
+                  "decoy": decoy_seed},
+    }
+    (ambig_out / "_manifest.json").write_text(
+        json.dumps(local_manifest, indent=2))
     return True
 
 

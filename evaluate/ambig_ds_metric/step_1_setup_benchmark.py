@@ -3,10 +3,8 @@
 
 Steps:
   1. Download prompts & metadata from HuggingFace (anonymous222bit/Ambig-DS-M)
-  2. Restrict task_list.txt to the 67-task evaluation scope.
-     Pass --keep-all-82 to disable.
-  3. Download competition data from Kaggle via MLE-bench
-  4. Verify all tasks are ready
+  2. Download competition data from Kaggle via MLE-bench
+  3. Verify all tasks are ready
 
 Prerequisites:
   pip install huggingface_hub mlebench kaggle
@@ -28,55 +26,6 @@ import sys
 from pathlib import Path
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Eval scope: 67-task subset of the 82-task HF dataset.
-#
-# The HF release ships all 82 competitions; this script (and every downstream
-# step that reads task_list.txt) restricts evaluation to the 67 listed below
-# by rewriting task_list.txt after the HF download.
-#
-# Pass --keep-all-82 to disable the filter.
-# ──────────────────────────────────────────────────────────────────────────────
-
-EXCLUDED_TASKS = {
-    "hubmap-kidney-segmentation",
-    "seti-breakthrough-listen",
-    "vinbigdata-chest-xray-abnormalities-detection",
-    "AI4Code",
-    "inaturalist-2019-fgvc6",
-    "cdiscount-image-classification-challenge",
-    "iwildcam-2019-fgvc6",
-    "freesound-audio-tagging-2019",
-    "multi-modal-gesture-recognition",
-    "spaceship-titanic",
-    "dogs-vs-cats-redux-kernels-edition",
-    "tabular-playground-series-may-2022",
-    "tabular-playground-series-dec-2021",
-    "playground-series-s3e18",
-    "ml2021spring-hw2",
-}
-
-
-def apply_eval_scope(benchmark_dir: Path, keep_all: bool) -> None:
-    """Rewrite task_list.txt to the 67-task evaluation scope.
-
-    Skips quietly if --keep-all-82 was passed or task_list.txt already filtered.
-    """
-    task_list = benchmark_dir / "task_list.txt"
-    if not task_list.exists():
-        return
-    tasks = [l.strip() for l in task_list.read_text().splitlines() if l.strip()]
-    if keep_all:
-        print(f"  --keep-all-82: leaving task_list.txt at {len(tasks)} tasks.")
-        return
-    kept = [t for t in tasks if t not in EXCLUDED_TASKS]
-    dropped = [t for t in tasks if t in EXCLUDED_TASKS]
-    if not dropped:
-        return  # already filtered
-    task_list.write_text("\n".join(kept) + "\n")
-    print(f"  Eval scope: kept {len(kept)} / {len(tasks)} tasks "
-          f"(dropped {len(dropped)}).")
-    print(f"  Pass --keep-all-82 to disable this filter.")
 
 
 def download_hf_dataset(benchmark_dir: Path, repo_id: str = "anonymous222bit/Ambig-DS-M"):
@@ -229,9 +178,6 @@ def main():
                     help="Comma-separated subset of tasks to download data for")
     ap.add_argument("--verify-only", action="store_true",
                     help="Only verify, don't download anything")
-    ap.add_argument("--keep-all-82", action="store_true",
-                    help="Disable the 67-task eval-scope filter and keep all "
-                         "82 tasks from the HF release in task_list.txt.")
     args = ap.parse_args()
 
     bd = args.benchmark_dir.resolve()
@@ -242,7 +188,6 @@ def main():
         return
 
     download_hf_dataset(bd, args.hf_repo)
-    apply_eval_scope(bd, keep_all=args.keep_all_82)
 
     if not args.skip_data:
         task_subset = args.tasks.split(",") if args.tasks else None

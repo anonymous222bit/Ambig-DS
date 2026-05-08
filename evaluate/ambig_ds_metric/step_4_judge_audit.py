@@ -29,6 +29,7 @@ import csv
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from collections import Counter
@@ -244,8 +245,8 @@ def call_judge(client: OpenAI, judge_model: str, sys_msg: str, user_msg: str,
     raise RuntimeError(f"judge call failed after retries: {last_err}")
 
 
-def parse_judge_output(text: str) -> tuple[dict | None, str]:
-    """Try to extract JSON. Returns (parsed_dict_or_None, raw_or_error)."""
+def _strip_code_fences(text: str) -> str:
+    """Remove leading/trailing markdown code fences (```json ... ```)."""
     t = text.strip()
     if t.startswith("```"):
         lines = t.splitlines()
@@ -254,25 +255,77 @@ def parse_judge_output(text: str) -> tuple[dict | None, str]:
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         t = "\n".join(lines).strip()
+    return t
 
+
+def _extract_json_substring(text: str) -> str | None:
+    """Return the outermost {...} substring, or None."""
+    i = text.find("{")
+    j = text.rfind("}")
+    if i >= 0 and j > i:
+        return text[i:j + 1]
+    return None
+
+
+def _regex_fallback(text: str) -> dict | None:
+    """Last-resort extraction: pull known fields via regex.
+
+    Handles the common failure mode where the LLM embeds unescaped quotes
+    inside evidence_quotes strings, breaking json.loads.
+    """
+    label_m = re.search(r'"label"\s*:\s*"([^"]+)"', text)
+    conf_m = re.search(r'"confidence"\s*:\s*([\d.]+)', text)
+    rat_m = re.search(r'"rationale"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if not label_m:
+        return None
+    d: dict = {"label": label_m.group(1)}
+    if conf_m:
+        try:
+            d["confidence"] = float(conf_m.group(1))
+        except ValueError:
+            pass
+    if rat_m:
+        d["rationale"] = rat_m.group(1)
+    return d
+
+
+def parse_judge_output(text: str) -> tuple[dict | None, str]:
+    """Try to extract JSON. Returns (parsed_dict_or_None, raw_or_error).
+
+    Parsing strategy (stops at first success):
+      1. Strip code fences, try json.loads on the full text.
+      2. Extract outermost {...} substring, try json.loads.
+      3. Regex fallback: pull label/confidence/rationale individually.
+    """
+    t = _strip_code_fences(text)
+
+    # Attempt 1: full text
     try:
         d = json.loads(t)
+        if isinstance(d, dict) and d.get("label") in LABELS:
+            return d, text
     except Exception:
-        i = t.find("{")
-        j = t.rfind("}")
-        if i >= 0 and j > i:
-            try:
-                d = json.loads(t[i:j + 1])
-            except Exception as e:
-                return None, f"JSON parse failed: {e}; raw={text[:400]}"
-        else:
-            return None, f"No JSON object found; raw={text[:400]}"
+        pass
 
-    if not isinstance(d, dict):
-        return None, f"Not a JSON object; raw={text[:400]}"
-    if d.get("label") not in LABELS:
-        return None, f"label not in allowed set: {d.get('label')!r}; raw={text[:400]}"
-    return d, text
+    # Attempt 2: outermost { ... }
+    sub = _extract_json_substring(t)
+    if sub:
+        try:
+            d = json.loads(sub)
+            if isinstance(d, dict) and d.get("label") in LABELS:
+                return d, text
+        except Exception:
+            pass
+
+    # Attempt 3: regex fallback for malformed JSON
+    d = _regex_fallback(t)
+    if d and d.get("label") in LABELS:
+        return d, text
+
+    # All attempts failed
+    if sub:
+        return None, f"JSON parse failed; raw={text[:400]}"
+    return None, f"No JSON object found; raw={text[:400]}"
 
 
 # ─── per-cell driver ───
