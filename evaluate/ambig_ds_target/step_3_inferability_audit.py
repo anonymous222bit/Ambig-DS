@@ -356,6 +356,22 @@ def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float, float]:
 # per-task
 # ---------------------------------------------------------------------------
 
+def _find_sample_submission(task_dir: Path) -> Path:
+    """Locate sample_submission.csv, trying the ambig dir first, then full."""
+    for name in ("sample_submission.csv", "sampleSubmission.csv"):
+        p = task_dir / name
+        if p.exists():
+            return p
+    # ambig dir may not have it; fall back to the sibling full/ dir
+    full_dir = task_dir.parent / "full"
+    for name in ("sample_submission.csv", "sampleSubmission.csv"):
+        p = full_dir / name
+        if p.exists():
+            return p
+    raise FileNotFoundError(
+        f"No sample submission in {task_dir} or {full_dir}")
+
+
 def audit_task(task_dir: Path, args, llm_client) -> list[dict]:
     manifest = json.loads((task_dir / "_manifest.json").read_text())
     truth = manifest["true_target_column"]
@@ -410,10 +426,10 @@ def audit_task(task_dir: Path, args, llm_client) -> list[dict]:
     if args.skip_llm or llm_client is None:
         pick_d, info_d = None, {}
     else:
-        prompt_path = task_dir / "prompt.txt"
-        prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
-        sub = pd.read_csv(task_dir / "sample_submission.csv", low_memory=False)
         try:
+            prompt_path = task_dir / "prompt.txt"
+            prompt_text = prompt_path.read_text() if prompt_path.exists() else ""
+            sub = pd.read_csv(_find_sample_submission(task_dir), low_memory=False)
             pick_d, info_d = selector_llm(
                 llm_client, args.llm_model, prompt_text, train, sub,
                 n_seeds=args.llm_seeds, include_prompt=True,
@@ -432,8 +448,8 @@ def audit_task(task_dir: Path, args, llm_client) -> list[dict]:
     if args.skip_llm or llm_client is None:
         pick_e, info_e = None, {}
     else:
-        sub = pd.read_csv(task_dir / "sample_submission.csv", low_memory=False)
         try:
+            sub = pd.read_csv(_find_sample_submission(task_dir), low_memory=False)
             pick_e, info_e = selector_llm(
                 llm_client, args.llm_model, "", train, sub,
                 n_seeds=args.llm_seeds, include_prompt=False,
@@ -576,6 +592,10 @@ def main():
         )
         for r in new_rows:
             done_keys.add((r["task"], r["selector"]))
+
+    if not out_csv.exists():
+        print("\nNo audit rows were produced — nothing to summarize.")
+        return
 
     df = pd.read_csv(out_csv)
     # Dedup: keep the LAST row per (task, selector) in append order. The CSV
