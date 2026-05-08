@@ -183,13 +183,23 @@ def copy_full_csvs(slug: str, dsbench_root: Path, benchmark_dir: Path) -> bool:
     dst = benchmark_dir / "data" / slug / "full"
     dst.mkdir(parents=True, exist_ok=True)
 
-    # train/test/sample_submission live next to each other under data_resplit/.
-    for n in ["train.csv", "test.csv", "sample_submission.csv"]:
+    # train/test live next to each other under data_resplit/.
+    for n in ["train.csv", "test.csv"]:
         if not (src / n).exists():
             print(f"  [{slug}] FULL: missing {n} in {src}")
             return False
         if not (dst / n).exists():
             shutil.copy2(src / n, dst / n)
+
+    # sample_submission: some upstream tasks use camelCase naming.
+    sub_src_name = "sample_submission.csv"
+    if not (src / sub_src_name).exists():
+        sub_src_name = "sampleSubmission.csv"
+    if not (src / sub_src_name).exists():
+        print(f"  [{slug}] FULL: missing sample_submission.csv in {src}")
+        return False
+    if not (dst / "sample_submission.csv").exists():
+        shutil.copy2(src / sub_src_name, dst / "sample_submission.csv")
 
     # test_answer.csv may live alongside the data OR in a sibling answers/ dir.
     answer_candidates = [
@@ -500,6 +510,8 @@ def main():
     if args.tasks:
         wanted = {s.strip() for s in args.tasks.split(",") if s.strip()}
         slugs = [s for s in slugs if s in wanted]
+        # Re-write task_list.txt so downstream steps only see requested tasks.
+        (bench / "task_list.txt").write_text("\n".join(slugs) + "\n")
     if not slugs:
         sys.exit("no slugs to process")
 

@@ -254,11 +254,23 @@ def grade(sub_path: Path, slug: str, benchmark_dir: Path,
     if target_name:
         try:
             df = pd.read_csv(sub_path)
-            if target_name not in df.columns and "prediction" in df.columns:
-                df = df.rename(columns={"prediction": target_name})
-                graded_sub = out_dir / "_submission_for_grader.csv"
-                df.to_csv(graded_sub, index=False)
-                rename_info = {"prediction": target_name}
+            if target_name not in df.columns:
+                # Try common fallback column names agents may produce.
+                for cand in ("prediction", "target", "val_1", "val_2"):
+                    if cand in df.columns:
+                        df = df.rename(columns={cand: target_name})
+                        rename_info = {cand: target_name}
+                        break
+                else:
+                    # Case-insensitive match as last resort.
+                    lower = {c.lower(): c for c in df.columns}
+                    if target_name.lower() in lower:
+                        src_col = lower[target_name.lower()]
+                        df = df.rename(columns={src_col: target_name})
+                        rename_info = {src_col: target_name}
+                if rename_info:
+                    graded_sub = out_dir / "_submission_for_grader.csv"
+                    df.to_csv(graded_sub, index=False)
         except Exception as e:
             return {"error": f"submission rename failed: {e}"}
 
