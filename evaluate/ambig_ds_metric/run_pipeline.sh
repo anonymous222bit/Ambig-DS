@@ -61,17 +61,9 @@ fi
 # "$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_1_generate_ambig_prompts.py" --benchmark-dir "$BENCH_DIR" --run
 
 # ── Step 3: (optional) Audit redacted prompts ─────────────────
-# The HF-shipped prompts use a different neutral-sentence format than the
-# auditor expects, so this gate fails on most tasks. The audit is designed
-# for the dataset-creation workflow; uncomment only if you regenerated
-# prompts in Step 2 above.
-#
-# echo
-# echo "[3/5] Auditing prompts for metric leaks..."
-# "$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_2_audit_prompts.py" --benchmark-dir "$BENCH_DIR" || {
-#   echo "WARNING: audit found issues. Continue? (Ctrl-C to abort, Enter to proceed)"
-#   read -r _
-# }
+# The static auditor (step_2_audit_prompts.py) has been removed from the
+# creation pipeline. Step 2 (LLM verify) covers the same ground via the
+# paper's four-item checklist. See create_datasets/ambig_ds_metric/README.md.
 
 # ── Step 4: Run agent on both variants ────────────────────────
 echo

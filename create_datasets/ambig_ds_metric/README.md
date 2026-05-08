@@ -7,7 +7,7 @@ prompts each available in two variants — `full` (original) and
 
 (The `prompts/` directory under the working benchmark may contain extra
 slugs; the canonical task set is whatever is listed in `task_list.txt`.
-Steps 2 and 3 only consider slugs in `task_list.txt`.)
+Steps 2 and 3 only process slugs in `task_list.txt`.)
 
 The output is a HuggingFace dataset:
 [`anonymous222bit/Ambig-DS-M`](https://huggingface.co/datasets/anonymous222bit/Ambig-DS-M).
@@ -26,9 +26,8 @@ create_datasets/ambig_ds_metric/
 └── pipeline/
     ├── _llm_client.py                       Shared OpenAI-compatible chat client
     ├── step_1_generate_ambig_prompts.py     Rewrite full → ambig_metric prompts (LLM)
-    ├── step_2_audit_prompts.py              Static checks for metric leaks in ambig prompts
-    ├── step_3_llm_verify.py                 LLM judge against the paper's 4-item checklist
-    └── step_4_upload_to_hf.py               Stage + push the dataset to HuggingFace
+    ├── step_2_llm_verify.py                 LLM judge against the paper's 4-item checklist
+    └── step_3_upload_to_hf.py               Stage + push the dataset to HuggingFace
 ```
 
 ---
@@ -38,9 +37,8 @@ create_datasets/ambig_ds_metric/
 | Step | Reads from                                                | Writes to                                                                              |
 | ---- | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | 1    | `<bench>/prompts/<slug>/full.md` + `metric_manifest.json` | `<bench>/prompts/<slug>/ambig_metric.md`                                               |
-| 2    | `<bench>/prompts/<slug>/{full,ambig_metric}.md`           | stdout report; per-task `<bench>/_audit/<slug>.json` (when `--write-report` is passed) |
-| 3    | `<bench>/prompts/<slug>/{full,ambig_metric}.md` + manifest | `<bench>/_verify/<slug>.json`, `_summary.json`, `rejected.txt`                         |
-| 4    | `<bench>/` (everything except `data/`) + `_verify/`        | local staging dir + `https://huggingface.co/datasets/<repo-id>` (when `--upload`)      |
+| 2    | `<bench>/prompts/<slug>/{full,ambig_metric}.md` + manifest | `<bench>/_verify/<slug>.json`, `_summary.json`, `rejected.txt`                         |
+| 3    | `<bench>/` (everything except `data/`) + `_verify/`        | local staging dir + `https://huggingface.co/datasets/<repo-id>` (when `--upload`)      |
 
 `<bench>` is the working benchmark directory created by
 `evaluate/ambig_ds_metric/step_1_setup_benchmark.py` (Step 1 of the eval
@@ -53,13 +51,13 @@ is `../../evaluate/ambig_ds_metric/benchmark`.
 
 ```bash
 # Python deps
-pip install openai>=1.0 huggingface_hub>=0.24 pandas>=2.0
+pip install 'openai>=1.0' 'huggingface_hub>=0.24' 'pandas>=2.0'
 
 # LLM access (any OpenAI-compatible endpoint)
 export OPENAI_API_KEY=sk-...
 export OPENAI_BASE_URL=https://api.openai.com/v1   # optional
 
-# HuggingFace push token (only for step_3 with --upload)
+# HuggingFace push token (only for step_3_upload_to_hf.py with --upload)
 export HF_TOKEN=hf_...
 ```
 
@@ -101,36 +99,7 @@ prints a warning so the slug can be re-generated with a higher cap.
 **Output:** `<bench>/prompts/<slug>/ambig_metric.md` for every slug in
 `task_list.txt`.
 
-### Step 2 — `step_2_audit_prompts.py`
-
-Static checks per task: metric-name leaks (curated `METRIC_ALIASES`),
-direction (max/min) leaks **inside the eval section**, probability-form
-hints, residual formulas, neutral-sentence sanity, length sanity, and
-eval-section structure.
-
-```bash
-python pipeline/step_2_audit_prompts.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
-```
-
-Exits non-zero on any CRITICAL finding. Use this as a CI gate before
-uploading. The current canonical HF prompts pass with 0 CRITICALs and a
-small number of informational WARNINGs (eval sections that contain inline
-submission-format text without an explicit subheader).
-
-Notes on the audit logic:
-
-- The Evaluation section ends at the **next markdown header of any level**
-  (so a following `### Submission File` subsection is *not* considered
-  eval body).
-- Per-task metric leak patterns come only from curated `METRIC_ALIASES`.
-  The previous "extract every word ≥4 chars from `metric_name`" fallback
-  was removed because it produced overwhelming false positives on generic
-  words like "bias", "with", "over", "columns", "error", "species".
-- Direction-keyword checks (`minimize` / `maximize` / `optimize` / …) are
-  scoped to the eval section. Bare uses elsewhere ("optimize algorithms",
-  "minimize unintended bias") are not metric leaks.
-
-### Step 3 — `step_3_llm_verify.py`
+### Step 2 — `step_2_llm_verify.py`
 
 LLM judge that applies the paper's four-item retention checklist
 (§3.3, “Verification and Filtering”) to every `ambig_metric.md`:
@@ -146,7 +115,7 @@ LLM judge that applies the paper's four-item retention checklist
 4. **Task preserved** — only metric-related information was removed.
 
 ```bash
-python pipeline/step_3_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
+python pipeline/step_2_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
 ```
 
 For each slug the judge produces strict JSON with per-check pass/fail,
@@ -167,7 +136,7 @@ Useful flags: `--slugs A B` (subset), `--force` (re-judge even when
 `<slug>.json` already exists), `--out-tag <tag>` (alternate output
 directory).
 
-### Step 4 — `step_4_upload_to_hf.py`
+### Step 3 — `step_3_upload_to_hf.py`
 
 Stage the dataset (everything except `data/`, which is the user-downloaded
 Kaggle data) into a clean directory and optionally push it to a HuggingFace
@@ -175,10 +144,10 @@ dataset repo.
 
 ```bash
 # Dry-run (stage only, do not push)
-python pipeline/step_4_upload_to_hf.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
+python pipeline/step_3_upload_to_hf.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
 
 # Stage + push
-python pipeline/step_4_upload_to_hf.py \
+python pipeline/step_3_upload_to_hf.py \
     --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark \
     --upload \
     --repo-id <your-org>/Ambig-DS-M
@@ -186,8 +155,9 @@ python pipeline/step_4_upload_to_hf.py \
 
 The stager copies (in this order): `task_list.txt`, `metric_manifest.json`
 (stripping any `_doc` key, attaching `validated_alternatives` from the
-step-3 verifier when present), `metrics_classified.csv`, `edits_log.md`
-(looked up first at `<bench>/edits_log.md`, then at
+step-2 verifier when present),
+`metrics_classified.csv` (optional — included if present),
+`edits_log.md` (optional — looked up at `<bench>/edits_log.md` or
 `<bench>/prompts/EDITS_LOG.md` for backward compatibility),
 `prompts/<slug>/{full,ambig_metric}.md` for each slug in `task_list.txt`,
 and a generated `README.md`.
@@ -209,9 +179,8 @@ byte-identically, use:
 ```bash
 export AMBIG_LLM_MODEL=anthropic_claude_opus_4_7   # model used for the release
 python pipeline/step_1_generate_ambig_prompts.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
-python pipeline/step_2_audit_prompts.py            --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
-python pipeline/step_3_llm_verify.py               --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
-python pipeline/step_4_upload_to_hf.py             --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
+python pipeline/step_2_llm_verify.py               --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run
+python pipeline/step_3_upload_to_hf.py             --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark
 ```
 
 Two LLM-determined details that may vary run-to-run (sampler / model drift):

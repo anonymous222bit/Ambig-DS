@@ -59,30 +59,24 @@ class TestIssue1_DeadCodeRemoved:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Issue 2: run_pipeline.sh audit step commented out
+# Issue 2: step_2_audit_prompts.py removed from creation pipeline
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestIssue2_AuditRemovedFromPipeline:
-    """The create-side audit (step_2_audit_prompts.py) should not run by default."""
+    """step_2_audit_prompts.py was removed; verify no references remain."""
 
-    def test_audit_call_commented_out(self):
+    def test_audit_script_deleted(self):
+        audit_path = EVAL_DIR.parent.parent / "create_datasets" / "ambig_ds_metric" / "pipeline" / "step_2_audit_prompts.py"
+        assert not audit_path.exists(), "step_2_audit_prompts.py should be deleted"
+
+    def test_no_reference_in_run_pipeline(self):
         sh = (EVAL_DIR / "run_pipeline.sh").read_text()
-        # There should be no uncommented invocation of step_2_audit_prompts.py
         for line in sh.splitlines():
             stripped = line.lstrip()
             if stripped.startswith("#"):
-                continue  # skip comments
+                continue
             assert "step_2_audit_prompts.py" not in stripped, \
                 f"step_2_audit_prompts.py is still called (uncommented): {stripped}"
-
-    def test_header_marks_audit_as_optional(self):
-        sh = (EVAL_DIR / "run_pipeline.sh").read_text()
-        # The header comment should mark audit as (optional)
-        assert "(optional)" in sh.split("Audit")[0].split("\n")[-1] or \
-               "optional" in sh.lower().split("audit")[0].split("\n")[-1] or \
-               any("audit" in line.lower() and "optional" in line.lower()
-                   for line in sh.splitlines()), \
-            "Header should mark audit step as optional"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
