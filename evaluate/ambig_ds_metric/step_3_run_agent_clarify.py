@@ -15,7 +15,7 @@ Per (slug, variant) we run the coding agent in three phases:
 Prerequisites:
   - Run step_1_setup_benchmark.py first to download prompts + data
   - Set OPENAI_API_KEY (or pass --api-key)
-  - Agent binary on PATH or pass --agent-bin
+  - opencode on PATH or pass --agent-bin
 
 Usage:
     python step_3_run_agent_clarify.py --benchmark-dir ./benchmark \\
@@ -42,7 +42,6 @@ from step_2_run_agent import (
     get_registry,
     grade,
     load_tasks,
-    recover_from_session,
     run_agent,
     submission_shape,
 )
@@ -186,15 +185,11 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
     else:
         t0 = time.time()
         msgA, toolsA, itersA, costA = run_agent(
-            args.agent, args.agent_bin, model, ask_prompt, ws_ask,
+            args.agent_bin, model, ask_prompt, ws_ask,
             args.api_key, args.base_url, timeout=args.ask_timeout,
         )
         elapsedA = time.time() - t0
         timed_out_A = isinstance(msgA, str) and msgA.startswith("ERROR: timeout")
-        if timed_out_A or (itersA == 0 and not toolsA):
-            rec = recover_from_session(ws_ask)
-            if rec.get("n_assistant", 0) > 0:
-                itersA = rec["n_assistant"]
 
         question = ""
         if qfile.exists():
@@ -286,17 +281,12 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
 
     t1 = time.time()
     msgC, toolsC, itersC, costC = run_agent(
-        args.agent, args.agent_bin, model, solve_prompt, ws,
+        args.agent_bin, model, solve_prompt, ws,
         args.api_key, args.base_url, timeout=args.timeout,
     )
     elapsedC = time.time() - t1
 
     timed_out_C = isinstance(msgC, str) and msgC.startswith("ERROR: timeout")
-    recovered = None
-    if timed_out_C or (itersC == 0 and not toolsC):
-        recovered = recover_from_session(ws)
-        if recovered.get("n_assistant", 0) > 0:
-            itersC = recovered["n_assistant"]
 
     traj = {
         "slug": slug, "variant": variant, "model": model,
@@ -311,8 +301,6 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
             "asked": asked,
         },
     }
-    if recovered is not None:
-        traj["recovered_from_session"] = recovered
     (out_task / "_traj.json").write_text(json.dumps(traj, indent=2))
 
     sub_in_ws = find_submission(ws)
@@ -362,12 +350,8 @@ def main():
                    help="Phase A (ask) timeout per task, seconds")
     p.add_argument("--skip-existing", action="store_true")
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--agent", choices=["claw", "opencode"], default="claw",
-                   help="Coding agent to run (default: claw)")
     p.add_argument("--agent-bin", default=None,
-                   help="Path to agent binary (default: 'claw' or 'opencode' on PATH)")
-    p.add_argument("--claw-bin", dest="claw_bin", default=None,
-                   help="DEPRECATED alias for --agent-bin")
+                   help="Path to opencode binary (default: auto-detect)")
     p.add_argument("--api-key", default=None,
                    help="OpenAI API key (default: $OPENAI_API_KEY)")
     p.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -386,7 +370,7 @@ def main():
 
     if args.agent_bin is None:
         from agents import default_bin as _default_bin
-        args.agent_bin = args.claw_bin or _default_bin(args.agent)
+        args.agent_bin = _default_bin()
 
     benchmark_dir = args.benchmark_dir.resolve()
     if not (benchmark_dir / "task_list.txt").exists():
@@ -397,7 +381,7 @@ def main():
         sys.exit("No API key. Set OPENAI_API_KEY or pass --api-key.")
 
     args.run_name = args.run_name or (
-        f"{args.agent}_{args.model}_{args.variant}"
+        f"opencode_{args.model}_{args.variant}"
         + ("_ask_only" if args.clarify_only else "_clarify")
         + ("_strict" if args.strict_protocol else "")
     )

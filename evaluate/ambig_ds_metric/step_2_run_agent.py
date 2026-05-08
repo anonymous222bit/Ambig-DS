@@ -3,14 +3,14 @@
 
 This is the main entry point for running experiments. It:
   1. Builds a workspace per task (symlinks data, creates task.md from prompt)
-  2. Runs an LLM-powered coding agent (claw or opencode) in the workspace
+  2. Runs the opencode coding agent in the workspace
   3. Locates the agent's submission CSV
   4. Grades it against the held-out ground truth via MLE-bench
 
 Prerequisites:
   - Run step_1_setup_benchmark.py first to download prompts + data
   - Set OPENAI_API_KEY (or pass --api-key)
-  - Agent binary on PATH or pass --agent-bin
+  - opencode on PATH or pass --agent-bin
 
 Usage:
     # Full prompts, all tasks
@@ -126,58 +126,14 @@ def build_workspace(
 # Agent runner
 # ──────────────────────────────────────────────────────────────────────────────
 
-def run_agent(agent: str, bin_path: str, model: str, prompt: str, cwd: Path,
+def run_agent(bin_path: str, model: str, prompt: str, cwd: Path,
               api_key: str, base_url: str, timeout: int = 600):
-    """Dispatch to the configured agent adapter (claw or opencode).
+    """Dispatch to the opencode agent adapter.
 
     Returns (message, tool_uses, iterations, cost).
     """
-    return _dispatch_agent(agent, bin_path, model, prompt, cwd,
+    return _dispatch_agent(bin_path, model, prompt, cwd,
                            api_key, base_url, timeout=timeout)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Session recovery (when the agent times out)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def recover_from_session(workspace: Path) -> dict:
-    """Parse claw's session JSONL to recover iteration count + token usage.
-
-    Only applicable when --agent claw; opencode does not write .claw/ sessions.
-    """
-    out = {
-        "session_path": None, "n_messages": 0, "n_assistant": 0,
-        "n_tool_uses": 0, "input_tokens": 0, "output_tokens": 0,
-        "cache_read_tokens": 0, "cache_creation_tokens": 0,
-    }
-    sess_dir = workspace / ".claw" / "sessions"
-    if not sess_dir.exists():
-        return out
-    sessions = sorted(sess_dir.rglob("session-*.jsonl"))
-    if not sessions:
-        return out
-    sess = sessions[-1]
-    out["session_path"] = str(sess)
-    for ln in sess.read_text().splitlines():
-        try:
-            obj = json.loads(ln)
-        except json.JSONDecodeError:
-            continue
-        if obj.get("type") != "message":
-            continue
-        msg = obj.get("message", {})
-        out["n_messages"] += 1
-        if msg.get("role") == "assistant":
-            out["n_assistant"] += 1
-            for blk in msg.get("blocks") or []:
-                if isinstance(blk, dict) and blk.get("type") == "tool_use":
-                    out["n_tool_uses"] += 1
-        usage = msg.get("usage") or {}
-        out["input_tokens"]          += int(usage.get("input_tokens", 0) or 0)
-        out["output_tokens"]         += int(usage.get("output_tokens", 0) or 0)
-        out["cache_read_tokens"]     += int(usage.get("cache_read_input_tokens", 0) or 0)
-        out["cache_creation_tokens"] += int(usage.get("cache_creation_input_tokens", 0) or 0)
-    return out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -276,17 +232,12 @@ def run_one(slug: str, variant: str, model: str, args, run_dir: Path,
 
     t0 = time.time()
     message, tool_uses, iters, cost = run_agent(
-        args.agent, args.agent_bin, model, prompt_text, ws,
+        args.agent_bin, model, prompt_text, ws,
         args.api_key, args.base_url, timeout=args.timeout,
     )
     elapsed = time.time() - t0
 
     timed_out = isinstance(message, str) and message.startswith("ERROR: timeout")
-    recovered = None
-    if timed_out or (iters == 0 and not tool_uses):
-        recovered = recover_from_session(ws)
-        if recovered.get("n_assistant", 0) > 0:
-            iters = recovered["n_assistant"]
 
     traj = {
         "slug": slug, "variant": variant, "model": model,
@@ -294,8 +245,6 @@ def run_one(slug: str, variant: str, model: str, args, run_dir: Path,
         "summary": message, "tool_uses": tool_uses,
         "timed_out": timed_out,
     }
-    if recovered is not None:
-        traj["recovered_from_session"] = recovered
     (out_task / "_traj.json").write_text(json.dumps(traj, indent=2))
 
     sub_in_ws = find_submission(ws)
@@ -344,23 +293,18 @@ def main():
                    help="Skip tasks with existing _grade.json")
     p.add_argument("--dry-run", action="store_true",
                    help="Build workspace only, don't run agent")
-    p.add_argument("--agent", choices=["claw", "opencode"], default="claw",
-                   help="Coding agent to run (default: claw)")
     p.add_argument("--agent-bin", default=None,
-                   help="Path to agent binary (default: 'claw' or 'opencode' on PATH)")
-    # Back-compat: --claw-bin still accepted as an alias for --agent-bin.
-    p.add_argument("--claw-bin", dest="claw_bin", default=None,
-                   help="DEPRECATED alias for --agent-bin")
+                   help="Path to opencode binary (default: auto-detect)")
     p.add_argument("--api-key", default=None,
                    help="OpenAI API key (default: $OPENAI_API_KEY)")
     p.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
                    help="OpenAI-compatible API base URL (default: $OPENAI_BASE_URL or OpenAI)")
     p.add_argument("--run-name", default=None,
-                   help="Run directory name (default: <agent>_<model>_<variant>)")
+                   help="Run directory name (default: opencode_<model>_<variant>)")
     args = p.parse_args()
 
     if args.agent_bin is None:
-        args.agent_bin = args.claw_bin or default_bin(args.agent)
+        args.agent_bin = default_bin()
 
     benchmark_dir = args.benchmark_dir.resolve()
     if not (benchmark_dir / "task_list.txt").exists():
@@ -370,7 +314,7 @@ def main():
     if not args.api_key and not args.dry_run:
         sys.exit("No API key. Set OPENAI_API_KEY or pass --api-key.")
 
-    args.run_name = args.run_name or f"{args.agent}_{args.model}_{args.variant}"
+    args.run_name = args.run_name or f"opencode_{args.model}_{args.variant}"
     results_dir = benchmark_dir / "results" / args.run_name
     results_dir.mkdir(parents=True, exist_ok=True)
 

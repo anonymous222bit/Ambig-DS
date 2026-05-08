@@ -1,10 +1,6 @@
-"""Agent adapters: a uniform interface around different coding agents.
+"""Agent adapter: uniform interface around the opencode coding agent.
 
-Currently supported:
-  - "claw"     - claw CLI (https://github.com/anthropics/claw-code, internal builds, etc.)
-  - "opencode" - opencode CLI (https://github.com/anomalyco/opencode)
-
-Both adapters return the same 4-tuple expected by `step_2_run_agent.py`:
+Returns a 4-tuple expected by the step_*_run_agent*.py scripts:
     (message, tool_uses, iterations, cost)
 where:
     message     str   - final assistant text or "ERROR: ..." prefix on failure
@@ -12,8 +8,8 @@ where:
     iterations  int   - number of assistant turns
     cost        str   - estimated cost (USD), or "" if unknown
 
-The adapters are intentionally side-effect-free w.r.t. the caller's environment;
-they construct a private subprocess env from the provided api_key/base_url.
+The adapter is intentionally side-effect-free w.r.t. the caller's environment;
+it constructs a private subprocess env from the provided api_key/base_url.
 """
 from __future__ import annotations
 
@@ -21,56 +17,6 @@ import json
 import os
 import subprocess
 from pathlib import Path
-
-# ──────────────────────────────────────────────────────────────────────────────
-# claw
-# ──────────────────────────────────────────────────────────────────────────────
-
-def run_claw(
-    bin_path: str,
-    model: str,
-    prompt: str,
-    cwd: Path,
-    api_key: str,
-    base_url: str,
-    timeout: int = 600,
-) -> tuple[str, list, int, str]:
-    env = os.environ.copy()
-    env["OPENAI_API_KEY"] = api_key
-    env["OPENAI_BASE_URL"] = base_url
-    env["GIT_CEILING_DIRECTORIES"] = str(cwd.parent)
-
-    cmd = [
-        bin_path,
-        "--model", f"openai/{model}",
-        "--output-format", "json",
-        "--permission-mode", "danger-full-access",
-        "prompt", prompt,
-    ]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            cwd=str(cwd), env=env, stdin=subprocess.DEVNULL,
-        )
-        if result.returncode != 0:
-            return f"ERROR (exit {result.returncode}): {result.stderr[-500:]}", [], 0, ""
-        for line in result.stdout.strip().split("\n"):
-            line = line.strip()
-            if line.startswith("{"):
-                data = json.loads(line)
-                return (
-                    data.get("message", ""),
-                    data.get("tool_uses", []),
-                    data.get("iterations", 0),
-                    data.get("estimated_cost", ""),
-                )
-        return f"ERROR: no JSON in output: {result.stdout[-300:]}", [], 0, ""
-    except subprocess.TimeoutExpired as e:
-        partial = (e.stdout or "")[-3000:]
-        return f"ERROR: timeout\n{partial}", [], 0, ""
-    except Exception as e:
-        return f"ERROR: {e}", [], 0, ""
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # opencode
@@ -204,7 +150,6 @@ def run_opencode(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def run_agent(
-    agent: str,
     bin_path: str,
     model: str,
     prompt: str,
@@ -213,12 +158,11 @@ def run_agent(
     base_url: str,
     timeout: int = 600,
 ) -> tuple[str, list, int, str]:
-    if agent == "claw":
-        return run_claw(bin_path, model, prompt, cwd, api_key, base_url, timeout)
-    if agent == "opencode":
-        return run_opencode(bin_path, model, prompt, cwd, api_key, base_url, timeout)
-    raise ValueError(f"unknown agent: {agent!r} (expected 'claw' or 'opencode')")
+    return run_opencode(bin_path, model, prompt, cwd, api_key, base_url, timeout)
 
 
-def default_bin(agent: str) -> str:
-    return {"claw": "claw", "opencode": "opencode"}[agent]
+def default_bin() -> str:
+    candidate = Path.home() / ".npm-global" / "bin" / "opencode"
+    if candidate.is_file():
+        return str(candidate)
+    return "opencode"

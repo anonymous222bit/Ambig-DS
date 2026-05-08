@@ -43,7 +43,7 @@ Per-task results live at `<benchmark-dir>/results/<run-name>/<slug>/`:
 ```bash
 pip install huggingface_hub pandas openai scikit-learn scipy numpy lightgbm
 # install your agent of choice
-npm i -g claw          # or: opencode
+npm i -g opencode-ai   # or: npm i -g claw-cli
 ```
 
 ### One-time: clone upstream DSBench for the original task data
@@ -59,9 +59,9 @@ official HF mirror (`liqiang888/DSBench`, ~3.13 GB):
 git clone --depth 1 https://github.com/liqiangjing/DSBench.git ~/DSBench
 
 # 2. Download the tabular data bundle from HuggingFace into data_modeling/.
-#    `hf` is the new HuggingFace CLI (ships with `huggingface_hub`).
+#    `huggingface-cli` ships with `huggingface_hub` (all versions).
 cd ~/DSBench/data_modeling
-hf download liqiang888/DSBench --repo-type dataset \
+huggingface-cli download liqiang888/DSBench --repo-type dataset \
     --include "data_modeling/data.zip" --local-dir .
 
 # 3. Unzip it. The archive expands to ./data/{data_resplit,answers,task}/.

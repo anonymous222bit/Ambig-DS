@@ -367,17 +367,17 @@ def rebuild_ambig_csvs(slug: str, release: Path, dsbench_root: Path,
     else:
         test_ids = np.arange(len(test))
 
-    out_train = pd.DataFrame({idcol: train_ids})
+    train_cols = {idcol: train_ids}
     for orig, anon in feature_map.items():
-        out_train[anon] = train[orig].values
-    out_train[truth_col] = y_tr
-    out_train[decoy_col] = val_2
-    out_train = out_train[[idcol] + anon_feat_cols + ["val_1", "val_2"]]
+        train_cols[anon] = train[orig].values
+    train_cols[truth_col] = y_tr
+    train_cols[decoy_col] = val_2
+    out_train = pd.DataFrame(train_cols)[[idcol] + anon_feat_cols + ["val_1", "val_2"]]
 
-    out_test = pd.DataFrame({idcol: test_ids})
+    test_cols = {idcol: test_ids}
     for orig, anon in feature_map.items():
-        out_test[anon] = test[orig].values
-    out_test = out_test[[idcol] + anon_feat_cols]
+        test_cols[anon] = test[orig].values
+    out_test = pd.DataFrame(test_cols)[[idcol] + anon_feat_cols]
 
     # ---- write ----------------------------------------------------------
     ambig_out.mkdir(parents=True, exist_ok=True)
