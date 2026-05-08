@@ -1,4 +1,4 @@
-"""Step 4: rewrite each task's normal prompt into a target-ambiguous variant.
+"""Step 2: rewrite each task's normal prompt into a target-ambiguous variant.
 
 For DSBench tasks the upstream DSBench repo already ships a clean per-task
 prompt at::
@@ -24,12 +24,12 @@ Credentials:
 
 Usage:
   # all 6 dsbench-remainder tasks from the spec CSV
-  python step_4_generate_ambig_prompts.py \
+  python step_2_generate_ambig_prompts.py \
       --tasks_csv $AMBIG_DSBENCH_ROOT/final_data_v3/target_ambig/dsbench_remainder_tasks.csv \
       --env-file  /path/to/.env
 
   # single slug
-  python step_4_generate_ambig_prompts.py --slug santander-customer-transaction-prediction
+  python step_2_generate_ambig_prompts.py --slug santander-customer-transaction-prediction
 """
 from __future__ import annotations
 
@@ -268,7 +268,7 @@ def rewrite_one(slug: str, *, root: Path, model: str, force: bool,
         print(f"[{slug}] SKIP — missing normal prompt: {normal_path}")
         return 2
     if not manifest_path.exists():
-        print(f"[{slug}] SKIP — missing manifest: {manifest_path} (run step_3b first)")
+        print(f"[{slug}] SKIP — missing manifest: {manifest_path} (run step_1_generate_decoy.py first)")
         return 2
     if out_canon.exists() and not force:
         print(f"[{slug}] SKIP — already exists: {out_canon} (use --force)")
@@ -366,7 +366,7 @@ def main() -> int:
 
     # Read AFTER load_env_file so --env-file values win.
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    model = os.environ.get("AMBIG_LLM_MODEL", args.model)
+    model = args.model if args.model != DEFAULT_MODEL else os.environ.get("AMBIG_LLM_MODEL", args.model)
     print(f"Using base_url={base_url}  model={model}")
     client = make_client(base_url=base_url)
     bad = 0

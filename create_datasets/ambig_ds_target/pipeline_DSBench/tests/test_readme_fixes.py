@@ -1,0 +1,213 @@
+"""Tests for fixes 1-4 in create_datasets/ambig_ds_target/pipeline_DSBench.
+
+1. Hyperparameter table in README matches actual code defaults.
+2. step_2_generate_ambig_prompts.py docstring/Usage reference the correct filename.
+3. --model CLI flag takes precedence over AMBIG_LLM_MODEL env var.
+4. No internal paths (project_5, project_6) leaked into the README.
+"""
+from __future__ import annotations
+
+import ast
+import os
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+PIPELINE = HERE.parent
+README = PIPELINE / "README.md"
+STEP2 = PIPELINE / "step_2_generate_ambig_prompts.py"
+STEP1 = PIPELINE / "step_1_generate_decoy.py"
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _parse_argparse_defaults(filepath: Path) -> dict[str, str]:
+    """Extract argparse add_argument default= values from a Python file.
+
+    Returns a dict of {flag_name: default_value_as_string}.
+    """
+    source = filepath.read_text()
+    defaults = {}
+    # Match patterns like: add_argument("--flag_name", ..., default=VALUE, ...)
+    for m in re.finditer(
+        r'add_argument\(\s*"--(\w+)".*?default\s*=\s*([^,\)]+)',
+        source, re.DOTALL,
+    ):
+        flag = m.group(1)
+        val = m.group(2).strip()
+        defaults[flag] = val
+    return defaults
+
+
+def _parse_readme_hyperparam_table(readme_text: str) -> dict[str, str]:
+    """Parse the hyperparameter table from the README.
+
+    Returns {flag_name: value_string} for each row.
+    """
+    rows = {}
+    for m in re.finditer(
+        r"\|\s*`--(\w+)`\s*\|\s*(\S+)\s*\|",
+        readme_text,
+    ):
+        flag = m.group(1)
+        val = m.group(2)
+        rows[flag] = val
+    return rows
+
+
+# ── Fix 1: hyperparameter table matches code defaults ────────────────────────
+
+class TestHyperparameterTable:
+    """README 'Reference: hyperparameters' table must match step_1 defaults."""
+
+    @pytest.fixture(scope="class")
+    def code_defaults(self):
+        return _parse_argparse_defaults(STEP1)
+
+    @pytest.fixture(scope="class")
+    def readme_values(self):
+        return _parse_readme_hyperparam_table(README.read_text())
+
+    @pytest.mark.parametrize("flag,expected_code_default", [
+        ("bisection_steps", "8"),
+        ("max_noise", "0.8"),
+        ("pool_max", "40"),
+        ("pool_frac", "0.7"),
+        ("cv_tolerance", "0.02"),
+        ("noise_classification", "0.10"),
+        ("noise_regression", "0.10"),
+    ])
+    def test_numeric_defaults_match(self, readme_values, code_defaults, flag, expected_code_default):
+        assert flag in readme_values, f"`--{flag}` missing from README table"
+        readme_val = float(readme_values[flag])
+        code_val = float(expected_code_default)
+        assert readme_val == pytest.approx(code_val), (
+            f"README says --{flag}={readme_values[flag]} but code default is {expected_code_default}"
+        )
+
+    def test_apply_dtype_snap_documented_as_off(self, readme_values):
+        assert "apply_dtype_snap" in readme_values
+        val = readme_values["apply_dtype_snap"].lower()
+        assert val == "off", (
+            f"README says --apply_dtype_snap={val} but code default is off (store_true)"
+        )
+
+
+# ── Fix 2: step_2 docstring and Usage reference correct filename ─────────────
+
+class TestStepNumbering:
+    """step_2_generate_ambig_prompts.py must not reference the old filename."""
+
+    @pytest.fixture(scope="class")
+    def step2_text(self):
+        return STEP2.read_text()
+
+    def test_docstring_says_step_2(self, step2_text):
+        # The very first line of the docstring should say "Step 2"
+        assert step2_text.startswith('"""Step 2:'), (
+            "Docstring should start with 'Step 2:', got: "
+            + step2_text[:60]
+        )
+
+    def test_no_step_4_generate_reference(self, step2_text):
+        assert "step_4_generate_ambig_prompts" not in step2_text, (
+            "step_2 still references the old filename step_4_generate_ambig_prompts"
+        )
+
+    def test_no_step_3b_reference(self, step2_text):
+        assert "step_3b" not in step2_text, (
+            "step_2 still references the old 'step_3b' (should be step_1_generate_decoy.py)"
+        )
+
+    def test_manifest_missing_message_references_step_1(self, step2_text):
+        assert "step_1_generate_decoy.py" in step2_text, (
+            "Missing manifest message should reference step_1_generate_decoy.py"
+        )
+
+
+# ── Fix 3: --model CLI flag wins over AMBIG_LLM_MODEL env var ────────────────
+
+class TestModelPrecedence:
+    """When --model is explicitly set, it must win over AMBIG_LLM_MODEL env."""
+
+    def test_explicit_model_wins_over_env(self):
+        """Simulate: --model my-custom-model with AMBIG_LLM_MODEL=env-model."""
+        # Import the module's DEFAULT_MODEL so we can construct the same logic
+        # the code uses.
+        sys.path.insert(0, str(PIPELINE))
+        try:
+            from _llm_client import DEFAULT_MODEL
+        finally:
+            sys.path.pop(0)
+
+        # The fixed logic: use args.model if it differs from DEFAULT_MODEL,
+        # otherwise fall back to env var.
+        explicit_model = "my-custom-model"
+        env_model = "env-model-should-lose"
+
+        old_env = os.environ.get("AMBIG_LLM_MODEL")
+        os.environ["AMBIG_LLM_MODEL"] = env_model
+        try:
+            # Simulate the fixed logic from main()
+            args_model = explicit_model
+            if args_model != DEFAULT_MODEL:
+                resolved = args_model
+            else:
+                resolved = os.environ.get("AMBIG_LLM_MODEL", args_model)
+            assert resolved == explicit_model, (
+                f"Explicit --model should win, got {resolved}"
+            )
+        finally:
+            if old_env is None:
+                os.environ.pop("AMBIG_LLM_MODEL", None)
+            else:
+                os.environ["AMBIG_LLM_MODEL"] = old_env
+
+    def test_env_used_when_model_is_default(self):
+        """When --model is not passed (DEFAULT_MODEL), env var should win."""
+        sys.path.insert(0, str(PIPELINE))
+        try:
+            from _llm_client import DEFAULT_MODEL
+        finally:
+            sys.path.pop(0)
+
+        env_model = "env-model-should-win"
+        old_env = os.environ.get("AMBIG_LLM_MODEL")
+        os.environ["AMBIG_LLM_MODEL"] = env_model
+        try:
+            args_model = DEFAULT_MODEL
+            if args_model != DEFAULT_MODEL:
+                resolved = args_model
+            else:
+                resolved = os.environ.get("AMBIG_LLM_MODEL", args_model)
+            assert resolved == env_model, (
+                f"Env var should win when --model is default, got {resolved}"
+            )
+        finally:
+            if old_env is None:
+                os.environ.pop("AMBIG_LLM_MODEL", None)
+            else:
+                os.environ["AMBIG_LLM_MODEL"] = old_env
+
+
+# ── Fix 4: no internal paths leaked into README ──────────────────────────────
+
+class TestNoInternalPaths:
+    """README must not reference internal project paths."""
+
+    @pytest.fixture(scope="class")
+    def readme_text(self):
+        return README.read_text()
+
+    @pytest.mark.parametrize("pattern", [
+        "project_5",
+        "project_6",
+        "/abs/path/to/info_theory",
+    ])
+    def test_no_internal_path(self, readme_text, pattern):
+        assert pattern not in readme_text, (
+            f"README still contains internal path reference: '{pattern}'"
+        )

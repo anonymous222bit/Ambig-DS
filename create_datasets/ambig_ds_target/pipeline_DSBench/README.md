@@ -91,19 +91,19 @@ your own paths and slug list as needed.
 
 ```bash
 # absolute paths (edit to match your machine)
-PROJ=/abs/path/to/info_theory
-WORKSPACE=/tmp/ambig_workspace            # fresh scratch dir
-ENV_FILE=$PROJ/project_5/.env             # OPENAI_API_KEY + OPENAI_BASE_URL
+DSBENCH_CLONE=~/DSBench                   # upstream DSBench git clone
+WORKSPACE=/tmp/ambig_workspace             # fresh scratch dir
+ENV_FILE=/path/to/your/.env                # OPENAI_API_KEY + OPENAI_BASE_URL
 
 export AMBIG_DSBENCH_ROOT=$WORKSPACE
 
-# Mirror the upstream DSBench data tree (source: project_6/Dataset/...)
+# Mirror the upstream DSBench data tree
 mkdir -p $WORKSPACE
-cp -r $PROJ/project_6/Dataset $WORKSPACE/
+cp -r $DSBENCH_CLONE/data_modeling/data $WORKSPACE/Dataset/data_modeling/data/data
 
 # Mirror the eval scripts (step 4 looks here)
 mkdir -p $WORKSPACE/DSBench/data_modeling/evaluation
-cp $PROJ/project_6/DSBench/data_modeling/evaluation/*_eval.py \
+cp $DSBENCH_CLONE/data_modeling/evaluation/*_eval.py \
    $WORKSPACE/DSBench/data_modeling/evaluation/
 
 # Choose the slug(s) to (re)build
@@ -112,16 +112,17 @@ SLUGS="bike-sharing-demand"
 
 ### 1. Generate calibrated decoy CSVs + manifest
 
-The task spec CSV must contain at minimum a `task` and a `target_name`
-column. Concatenate the two source CSVs that ship with v3 if your slug
-isn't in either of them individually:
+The task spec CSV must contain at minimum `task`, `target_name`, and
+`target_type` columns. A pre-built spec covering all 51 DSBench tasks
+can be extracted from the HF release's `tasks.csv` + per-task manifests,
+or you can write one by hand for the slugs you need:
 
 ```bash
-SRC=$PROJ/project_6/final_data_v3/target_ambig
-SPEC=$WORKSPACE/_combined_tasks.csv
-{ head -1 $SRC/target_ambiguity_tasks.csv;
-  tail -n +2 $SRC/target_ambiguity_tasks.csv;
-  tail -n +2 $SRC/expansion_tasks.csv; } > $SPEC
+SPEC=$WORKSPACE/_tasks.csv
+cat > $SPEC << 'EOF'
+task,target_name,target_type
+bike-sharing-demand,count,regression
+EOF
 
 python step_1_generate_decoy.py \
     --tasks_csv      $SPEC \
@@ -158,9 +159,6 @@ done
 ### 3. Generate the target-ambig prompt (LLM rewrite)
 
 ```bash
-unset OPENAI_API_KEY OPENAI_BASE_URL                  # avoid stale shell creds
-export AMBIG_LLM_MODEL=anthropic_claude_opus_4_7      # any chat-completions model
-
 for s in $SLUGS; do
   python step_2_generate_ambig_prompts.py \
       --slug      $s \
@@ -206,7 +204,7 @@ This layout is byte-identical in structure (and bit-identical in `task.txt`
 + `eval.py` + manifest schema) to the current HF release. Verify with:
 
 ```bash
-diff -rq $WORKSPACE/release $PROJ/_gh_work/tmp/repro_check/hf_release
+diff -rq $WORKSPACE/release /path/to/existing/hf_release
 ```
 
 (Per-task `task_ambig.txt` will differ — it's the new Opus-generated
@@ -245,13 +243,13 @@ per slug in a loop).
 | param                      | value | rationale |
 |----------------------------|-------|-----------|
 | `--cv_tolerance`           | 0.02  | matches the paper's "within 0.02" bound |
-| `--bisection_steps`        | 12    | converges $\eta$ to ~0.0002 precision over [0, 0.5] |
-| `--max_noise`              | 0.50  | hard cap; tasks needing more are left at the closest candidate |
+| `--bisection_steps`        | 8     | converges $\eta$ to ~0.003 precision over [0, 0.8] |
+| `--max_noise`              | 0.80  | hard cap; tasks needing more are left at the closest candidate |
 | `--noise_classification`   | 0.10  | fallback only (used when calibration cannot run) |
 | `--noise_regression`       | 0.10  | fallback only |
-| `--pool_max`               | 8     | upper bound on the number of low-Spearman features used to build the synthetic score |
-| `--pool_frac`              | 0.6   | take the bottom 60% of features by `|Spearman(feature, y)|` |
-| `--apply_dtype_snap`       | on    | snap the noised decoy back to the truth's dtype (e.g. int 0/1) |
+| `--pool_max`               | 40    | upper bound on the number of low-Spearman features used to build the synthetic score |
+| `--pool_frac`              | 0.7   | take the bottom 70% of features by `|Spearman(feature, y)|` |
+| `--apply_dtype_snap`       | off   | pass `--apply_dtype_snap` to snap the noised decoy back to the truth's dtype (e.g. int 0/1) |
 
 Per the paper, **39 of 51** retained tasks meet the 0.02 gap criterion; the
 rest fall back to the closest candidate that still passes the marginal-match
