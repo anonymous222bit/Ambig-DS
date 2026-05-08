@@ -42,8 +42,8 @@ Per-task results live at `<benchmark-dir>/results/<run-name>/<slug>/`:
 
 ```bash
 pip install huggingface_hub pandas openai scikit-learn scipy numpy lightgbm
-# install your agent of choice
-npm i -g opencode-ai   # or: npm i -g claw-cli
+# install the opencode agent
+npm i -g opencode-ai
 ```
 
 ### One-time: clone upstream DSBench for the original task data
@@ -170,9 +170,9 @@ python step_4_run_agent.py --benchmark-dir ./benchmark \
     --variant ambig_target --model anthropic_claude_haiku_4_5_v1_0
 ```
 
-Useful flags: `--agent {claw,opencode}`, `--tasks slug1,slug2`,
+Useful flags: `--tasks slug1,slug2`,
 `--timeout 1800`, `--skip-existing`, `--dry-run`,
-`--run-name my_run`, `--agent-bin /path/to/claw`.
+`--run-name my_run`, `--agent-bin /path/to/opencode`.
 
 ## Step 5 — run the agent WITH one-turn clarification
 
@@ -204,13 +204,13 @@ Two ask policies are supported, mirroring the paper:
 - **Conservative** (`--strict-protocol`): `STRICT_CLARIFY_PROTOCOL` — agent
   asks only if the task cannot be solved from prompt + data; unnecessary
   clarification is penalized. Verbatim from the paper's
-  `evaluate_claw_clarify.py`.
+  original clarify script.
 
 ### Clarify-only mode (`--clarify-only`)
 
 Run **only** Phase A (ask) + Phase B (answer). Skips Phase C (solve), so no
 submission is produced and no grading happens. Mirrors the paper's
-`evaluate_claw_ask_only.py`. Output per slug: `_clarify.json` only.
+ask-only script. Output per slug: `_clarify.json` only.
 
 ### Run all 4 ask conditions (clarify-only)
 
@@ -311,5 +311,5 @@ between step 4/5 and this step).
   via `sys.path` so the decoy logic stays single-source.
 - The `ambig` variant intentionally omits `sample_submission.csv` because
   the rewritten prompt drops references to it.
-- Both step 4 and step 5 default to `claw`; pass `--agent opencode` (and
-  ensure `opencode.json` is in the workspace's parent dir if needed).
+- Step 4 and step 5 use opencode by default; pass `--agent-bin` if the binary
+  is not on PATH.

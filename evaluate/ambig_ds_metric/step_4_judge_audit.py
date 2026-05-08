@@ -7,7 +7,7 @@ and asks a JUDGE LLM to classify the agent's optimization target into one of:
     Intended | FormBroken | WrongObjective | Abdicated | Invalid | Other
 
 Writes one cached output per cell:
-    results/claw_<MODEL>_<VARIANT>[_clarify]/<slug>/_audit.<judge_model>.json
+    results/opencode_<MODEL>_<VARIANT>[_clarify]/<slug>/_audit.<judge_model>.json
 
 Skip-existing by default. Re-run with --overwrite to rebuild.
 
@@ -453,7 +453,7 @@ def main():
                     help="Comma-separated list of agent_model keys "
                          "(the dir suffix in results/<agent>_<KEY>_*).")
     ap.add_argument("--agent-prefix", default="opencode",
-                    help="Run-dir prefix (e.g. 'opencode' or 'claw'). "
+                    help="Run-dir prefix (e.g. 'opencode'). "
                          "Defaults to 'opencode'.")
     ap.add_argument("--conditions", default="ambig_metric",
                     help="Comma-separated. Each item is one of: full, ambig_metric, "

@@ -105,8 +105,6 @@ npm install -g opencode-ai
 opencode --version
 ```
 
-(Or use the internal `claw` CLI, which is also supported via `--agent claw`.)
-
 ### 5. Project `.env` and run the pipelines
 
 ```bash

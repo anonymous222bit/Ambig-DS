@@ -10,7 +10,7 @@ Usage:
 
     # Batch grade all submissions in a results directory
     python grade_submission.py --benchmark-dir ./benchmark \\
-        --results-dir ./benchmark/results/claw_gpt-4o_full
+        --results-dir ./benchmark/results/opencode_gpt-4o_full
 """
 from __future__ import annotations
 

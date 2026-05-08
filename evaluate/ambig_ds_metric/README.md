@@ -16,7 +16,7 @@ If you want to (re)build the dataset itself, see
 evaluate/ambig_ds_metric/
 ├── README.md                            ← this file
 ├── _llm_client.py                         Shared OpenAI-compatible chat client
-├── agents.py                              Agent adapters: claw + opencode (uniform interface)
+├── agents.py                              Agent adapter: opencode (uniform interface)
 ├── opencode.json                          Reference opencode config (env-var driven)
 ├── clarify_answerer.py                    Answerer LLM for the clarify protocol
 ├── grade_submission.py                    Standalone grading utility (single + batch)
@@ -120,16 +120,15 @@ export OPENAI_BASE_URL=https://api.openai.com/v1   # optional; any compatible ga
 
 ### 4. Coding-agent CLI
 
-Pick one with `--agent`:
+Install [opencode](https://github.com/anomalyco/opencode):
 
-| `--agent`   | Install                                                                   | Default `--agent-bin` |
-| ----------- | ------------------------------------------------------------------------- | --------------------- |
-| `claw`      | (internal / external `claw` build)                                        | `claw`                |
-| `opencode`  | `npm i -g opencode-ai@latest` *or* `curl -fsSL https://opencode.ai/install \| bash` | `opencode`            |
+```bash
+npm i -g opencode-ai@latest
+# or: curl -fsSL https://opencode.ai/install | bash
+```
 
-Both adapters live in [`agents.py`](agents.py) and obey the same contract:
-`run_agent(agent, bin, model, prompt, cwd, api_key, base_url, timeout) → (message, tool_uses, iters, cost)`.
-Adding a third agent is a one-function patch.
+The adapter lives in [`agents.py`](agents.py) and obeys:
+`run_agent(bin, model, prompt, cwd, api_key, base_url, timeout) → (message, tool_uses, iters, cost)`.
 
 For `opencode`, an ephemeral `opencode.json` is written into each
 workspace registering an OpenAI-compatible provider whose `apiKey` and
@@ -175,7 +174,6 @@ python step_2_run_agent.py \
     --benchmark-dir ./benchmark \
     --variant {full|ambig_metric} \
     --model <model-id> \
-    --agent {claw|opencode} \
     --tasks {all|slug1,slug2}
 ```
 
@@ -215,12 +213,11 @@ python step_3_run_agent_clarify.py \
     --benchmark-dir ./benchmark \
     --variant ambig_metric \
     --model <agent-model-id> \
-    --answerer-model <answerer-model-id> \
-    --agent {claw|opencode}
+    --answerer-model <answerer-model-id>
 ```
 
-**Default `<run>`:** `<agent>_<model>_<variant>_clarify`
-(`+_strict` if `--strict-protocol`, or `<agent>_<model>_<variant>_ask_only`
+**Default `<run>`:** `opencode_<model>_<variant>_clarify`
+(`+_strict` if `--strict-protocol`, or `opencode_<model>_<variant>_ask_only`
 when `--clarify-only`).
 
 #### Ask policies (`--strict-protocol`)
@@ -256,7 +253,6 @@ for VARIANT in full ambig_metric; do
         --variant "$VARIANT" \
         --model "$MODEL" \
         --answerer-model "$ANSW" \
-        --agent claw \
         --clarify-only $POLICY \
         --skip-existing
   done
@@ -267,10 +263,10 @@ Result directories produced:
 
 | variant       | policy        | run dir                                                      |
 | ------------- | ------------- | ------------------------------------------------------------ |
-| full          | permissive    | `results/claw_<MODEL>_full_ask_only/`                        |
-| full          | conservative  | `results/claw_<MODEL>_full_ask_only_strict/`                 |
-| ambig_metric  | permissive    | `results/claw_<MODEL>_ambig_metric_ask_only/`                |
-| ambig_metric  | conservative  | `results/claw_<MODEL>_ambig_metric_ask_only_strict/`         |
+| full          | permissive    | `results/opencode_<MODEL>_full_ask_only/`                    |
+| full          | conservative  | `results/opencode_<MODEL>_full_ask_only_strict/`             |
+| ambig_metric  | permissive    | `results/opencode_<MODEL>_ambig_metric_ask_only/`            |
+| ambig_metric  | conservative  | `results/opencode_<MODEL>_ambig_metric_ask_only_strict/`     |
 
 Existing `*_clarify/` runs (full ask→answer→solve) are **not** overwritten:
 clarify-only writes to `*_ask_only*` directories.
@@ -341,11 +337,11 @@ Verified result on the smoke test (n=1, `spooky-author-identification`):
 ## End-to-end orchestrator
 
 ```bash
-# Defaults: AGENT=claw, AGENT_BIN=$AGENT, BASE_URL=$OPENAI_BASE_URL or OpenAI
+# Defaults: AGENT_BIN=opencode, BASE_URL=$OPENAI_BASE_URL or OpenAI
 ./run_pipeline.sh ./benchmark <model-id> <slug-or-all>
 
-# With opencode + a custom binary path:
-AGENT=opencode AGENT_BIN=/path/to/opencode \
+# With a custom binary path:
+AGENT_BIN=/path/to/opencode \
     ./run_pipeline.sh ./benchmark <model-id> <slug>
 ```
 

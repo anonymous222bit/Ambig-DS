@@ -141,17 +141,13 @@ class TestIssue7_SslTlsDocumented:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestIssue8_DefaultBinAutoDetect:
-    """default_bin('opencode') should auto-detect ~/.npm-global/bin/opencode."""
-
-    def test_claw_unchanged(self):
-        from agents import default_bin
-        assert default_bin("claw") == "claw"
+    """default_bin() should auto-detect ~/.npm-global/bin/opencode."""
 
     def test_opencode_falls_back_to_bare(self):
         """When ~/.npm-global/bin/opencode doesn't exist, fall back to 'opencode'."""
         from agents import default_bin
         with mock.patch("agents.Path.is_file", return_value=False):
-            result = default_bin("opencode")
+            result = default_bin()
         assert result == "opencode"
 
     def test_opencode_detects_npm_global(self):
@@ -159,13 +155,8 @@ class TestIssue8_DefaultBinAutoDetect:
         from agents import default_bin
         expected = str(Path.home() / ".npm-global" / "bin" / "opencode")
         with mock.patch("agents.Path.is_file", return_value=True):
-            result = default_bin("opencode")
+            result = default_bin()
         assert result == expected
-
-    def test_invalid_agent_raises(self):
-        from agents import default_bin
-        with pytest.raises(KeyError):
-            default_bin("unknown_agent")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -275,33 +266,37 @@ class TestIssue10_RelativePathInFooter:
 # Issue 11: Stale docstring references to "claw"
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestIssue11_StaleDocstrings:
-    """Docstrings should not refer to claw as the only agent."""
+class TestIssue11_NoClaw:
+    """All claw references should be removed from code and docstrings."""
 
-    def test_step2_docstring_mentions_opencode(self):
+    def test_step2_docstring_no_claw(self):
         import step_2_run_agent as s2
         doc = s2.__doc__
-        assert "claw or opencode" in doc or "opencode" in doc
+        assert "claw" not in doc.lower(), \
+            f"step_2 docstring should not mention claw: {doc[:200]}"
 
-    def test_step2_docstring_no_claw_only(self):
-        import step_2_run_agent as s2
-        doc = s2.__doc__
-        # "coding agent (claw)" without mentioning opencode is stale
-        assert "agent (claw)" not in doc or "opencode" in doc
-
-    def test_step3_docstring_not_claw_only(self):
+    def test_step3_docstring_no_claw(self):
         import step_3_run_agent_clarify as s3
         doc = s3.__doc__
-        assert "we run claw in" not in doc, \
-            "step_3 docstring should say 'the coding agent', not 'claw'"
+        assert "claw" not in doc.lower(), \
+            f"step_3 docstring should not mention claw: {doc[:200]}"
 
-    def test_step2_prereqs_no_claw_bin(self):
-        import step_2_run_agent as s2
-        doc = s2.__doc__
-        assert "--claw-bin" not in doc, \
-            "Docstring should reference --agent-bin, not deprecated --claw-bin"
+    def test_agents_no_run_claw(self):
+        import agents
+        assert not hasattr(agents, "run_claw"), "run_claw should be removed"
 
-    def test_step3_prereqs_no_claw_bin(self):
-        import step_3_run_agent_clarify as s3
-        doc = s3.__doc__
-        assert "--claw-bin" not in doc
+    def test_run_agent_no_agent_param(self):
+        """run_agent() should NOT take an 'agent' string parameter."""
+        import inspect
+        from agents import run_agent
+        sig = inspect.signature(run_agent)
+        assert "agent" not in sig.parameters, \
+            f"run_agent should not have 'agent' param: {sig}"
+
+    def test_default_bin_no_param(self):
+        """default_bin() should take no arguments."""
+        import inspect
+        from agents import default_bin
+        sig = inspect.signature(default_bin)
+        assert len(sig.parameters) == 0, \
+            f"default_bin should take no args: {sig}"

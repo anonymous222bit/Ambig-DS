@@ -23,7 +23,7 @@ ablation symmetry with ambig_ds_metric).
 Prerequisites:
   - step_1_setup_benchmark.py has been run
   - OPENAI_API_KEY (or pass --api-key)
-  - claw or opencode on PATH (or pass --agent-bin)
+  - opencode on PATH (or pass --agent-bin)
 
 Usage:
     python step_5_run_agent_clarify.py --benchmark-dir ./benchmark \\
@@ -50,7 +50,6 @@ from step_4_run_agent import (
     find_submission,
     grade,
     load_tasks,
-    recover_from_session,
     run_agent,
     submission_shape,
 )
@@ -76,8 +75,7 @@ the user.
 """
 
 # Stricter ("conservative") version: discourages unnecessary clarification on
-# already-specified tasks. Selected with --strict-protocol. Verbatim from the
-# paper's evaluate_claw_clarify.py / evaluate_claw_ask_only.py.
+# already-specified tasks. Selected with --strict-protocol.
 STRICT_CLARIFY_PROTOCOL = """
 
 [CLARIFY PROTOCOL — read carefully]
@@ -216,14 +214,10 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
     else:
         t0 = time.time()
         msgA, toolsA, itersA, costA = run_agent(
-            args.agent, args.agent_bin, model, ask_prompt, ws_ask,
+            args.agent_bin, model, ask_prompt, ws_ask,
             args.api_key, args.base_url, timeout=args.ask_timeout)
         elapsedA = time.time() - t0
         timed_out_A = isinstance(msgA, str) and msgA.startswith("ERROR: timeout")
-        if timed_out_A or (itersA == 0 and not toolsA):
-            rec = recover_from_session(ws_ask)
-            if rec.get("n_assistant", 0) > 0:
-                itersA = rec["n_assistant"]
 
         question = ""
         if qfile.exists():
@@ -308,16 +302,11 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
 
     t1 = time.time()
     msgC, toolsC, itersC, costC = run_agent(
-        args.agent, args.agent_bin, model, solve_prompt, ws,
+        args.agent_bin, model, solve_prompt, ws,
         args.api_key, args.base_url, timeout=args.timeout)
     elapsedC = time.time() - t1
 
     timed_out_C = isinstance(msgC, str) and msgC.startswith("ERROR: timeout")
-    recovered = None
-    if timed_out_C or (itersC == 0 and not toolsC):
-        recovered = recover_from_session(ws)
-        if recovered.get("n_assistant", 0) > 0:
-            itersC = recovered["n_assistant"]
 
     traj = {
         "slug": slug, "variant": variant, "model": model,
@@ -331,8 +320,6 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
             "timed_out": timed_out_A, "asked": asked,
         },
     }
-    if recovered is not None:
-        traj["recovered_from_session"] = recovered
     (out_task / "_traj.json").write_text(json.dumps(traj, indent=2))
 
     sub_in_ws = find_submission(ws)
@@ -378,8 +365,8 @@ def main():
                    help="Phase A (ask) timeout per task, seconds")
     p.add_argument("--skip-existing", action="store_true")
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--agent", choices=["claw", "opencode"], default="claw")
-    p.add_argument("--agent-bin", default=None)
+    p.add_argument("--agent-bin", default=None,
+                   help="Path to opencode binary (default: auto-detect)")
     p.add_argument("--api-key", default=None)
     p.add_argument("--base-url",
                    default=os.environ.get("OPENAI_BASE_URL",
@@ -392,12 +379,11 @@ def main():
                         "(STRICT_CLARIFY_PROTOCOL). Default: permissive.")
     p.add_argument("--clarify-only", dest="clarify_only", action="store_true",
                    help="Run only Phase A (ask) + Phase B (answer). Skip Phase C (solve), "
-                        "do not produce a submission or grade. Mirrors the paper's "
-                        "evaluate_claw_ask_only.py.")
+                        "do not produce a submission or grade.")
     args = p.parse_args()
 
     if args.agent_bin is None:
-        args.agent_bin = default_bin(args.agent)
+        args.agent_bin = default_bin()
     if args.answerer_model is None:
         args.answerer_model = args.model
 
@@ -411,7 +397,7 @@ def main():
         sys.exit("No API key. Set OPENAI_API_KEY or pass --api-key.")
 
     args.run_name = (args.run_name
-                     or (f"{args.agent}_{args.model}_{args.variant}"
+                     or (f"opencode_{args.model}_{args.variant}"
                          + ("_ask_only" if args.clarify_only else "_clarify")
                          + ("_strict" if args.strict_protocol else "")))
     run_dir = benchmark_dir / "results" / args.run_name

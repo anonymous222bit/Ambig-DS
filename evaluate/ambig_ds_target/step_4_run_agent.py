@@ -6,7 +6,7 @@ For each task we:
      - data/                  (symlinks of train.csv / test.csv / sample_submission.csv)
      - task.md                (prompt + submission instructions)
      - _meta.json             (workspace provenance)
-  2. Run a coding agent (claw or opencode) inside the workspace.
+  2. Run the opencode coding agent inside the workspace.
   3. Locate the agent's submission CSV in the workspace.
   4. Grade it via the per-task DSBench evaluator at
      <bench>/release/tasks/<slug>/eval.py against the held-out
@@ -33,17 +33,16 @@ Outputs land at <bench>/results/<run>/<slug>/:
 Prerequisites:
   - Run step_1_setup_benchmark.py first
   - Set OPENAI_API_KEY (or pass --api-key) and OPENAI_BASE_URL if needed
-  - claw or opencode on PATH (or pass --agent-bin)
+  - opencode on PATH (or pass --agent-bin)
 
 Usage:
-    # Full prompts, all tasks, claw
+    # Full prompts, all tasks
     python step_4_run_agent.py --benchmark-dir ./benchmark \\
         --variant full --model anthropic_claude_haiku_4_5_v1_0
 
     # Ambig prompts, opencode, subset
     python step_4_run_agent.py --benchmark-dir ./benchmark \\
         --variant ambig_target --model anthropic_claude_haiku_4_5_v1_0 \\
-        --agent opencode \\
         --tasks playground-series-s3e17,playground-series-s3e19
 """
 from __future__ import annotations
@@ -132,47 +131,11 @@ def build_workspace(slug: str, variant: str, benchmark_dir: Path,
 
 
 # --------------------------------------------------------------------------- #
-def run_agent(agent: str, bin_path: str, model: str, prompt: str, cwd: Path,
+def run_agent(bin_path: str, model: str, prompt: str, cwd: Path,
               api_key: str, base_url: str, timeout: int = 600):
-    return _dispatch_agent(agent, bin_path, model, prompt, cwd,
+    return _dispatch_agent(bin_path, model, prompt, cwd,
                            api_key, base_url, timeout=timeout)
 
-
-def recover_from_session(workspace: Path) -> dict:
-    """Parse claw's session jsonl to recover iteration count + token usage."""
-    out = {
-        "session_path": None, "n_messages": 0, "n_assistant": 0,
-        "n_tool_uses": 0, "input_tokens": 0, "output_tokens": 0,
-        "cache_read_tokens": 0, "cache_creation_tokens": 0,
-    }
-    sess_dir = workspace / ".claw" / "sessions"
-    if not sess_dir.exists():
-        return out
-    sessions = sorted(sess_dir.rglob("session-*.jsonl"))
-    if not sessions:
-        return out
-    sess = sessions[-1]
-    out["session_path"] = str(sess)
-    for ln in sess.read_text().splitlines():
-        try:
-            obj = json.loads(ln)
-        except json.JSONDecodeError:
-            continue
-        if obj.get("type") != "message":
-            continue
-        msg = obj.get("message", {})
-        out["n_messages"] += 1
-        if msg.get("role") == "assistant":
-            out["n_assistant"] += 1
-            for blk in msg.get("blocks") or []:
-                if isinstance(blk, dict) and blk.get("type") == "tool_use":
-                    out["n_tool_uses"] += 1
-        usage = msg.get("usage") or {}
-        out["input_tokens"]          += int(usage.get("input_tokens", 0) or 0)
-        out["output_tokens"]         += int(usage.get("output_tokens", 0) or 0)
-        out["cache_read_tokens"]     += int(usage.get("cache_read_input_tokens", 0) or 0)
-        out["cache_creation_tokens"] += int(usage.get("cache_creation_input_tokens", 0) or 0)
-    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -393,7 +356,7 @@ def run_one(slug: str, variant: str, model: str, args, run_dir: Path,
 
     t0 = time.time()
     message, tool_uses, iters, cost = run_agent(
-        args.agent, args.agent_bin, model, prompt_text, ws,
+        args.agent_bin, model, prompt_text, ws,
         args.api_key, args.base_url, timeout=args.timeout)
     elapsed = time.time() - t0
 
@@ -438,8 +401,8 @@ def main():
     p.add_argument("--timeout", type=int, default=600)
     p.add_argument("--skip-existing", action="store_true")
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--agent", choices=["claw", "opencode"], default="claw")
-    p.add_argument("--agent-bin", default=None)
+    p.add_argument("--agent-bin", default=None,
+                   help="Path to opencode binary (default: auto-detect)")
     p.add_argument("--api-key", default=None)
     p.add_argument("--base-url",
                    default=os.environ.get("OPENAI_BASE_URL",
@@ -449,7 +412,7 @@ def main():
     args = p.parse_args()
 
     if args.agent_bin is None:
-        args.agent_bin = default_bin(args.agent)
+        args.agent_bin = default_bin()
 
     benchmark_dir = args.benchmark_dir.resolve()
     if not (benchmark_dir / "task_list.txt").exists():
@@ -460,7 +423,7 @@ def main():
     if not args.api_key and not args.dry_run:
         sys.exit("No API key. Set OPENAI_API_KEY or pass --api-key.")
 
-    args.run_name = args.run_name or f"{args.agent}_{args.model}_{args.variant}"
+    args.run_name = args.run_name or f"opencode_{args.model}_{args.variant}"
     results_dir = benchmark_dir / "results" / args.run_name
     results_dir.mkdir(parents=True, exist_ok=True)
 
