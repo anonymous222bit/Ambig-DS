@@ -20,10 +20,10 @@ Step 3 (upload) reads `_verify/_summary.json` if present and refuses to
 upload slugs flagged as failed unless `--allow-failed` is given.
 
 Usage:
-    python step_2_llm_verify.py --benchmark-dir ../benchmark                   # dry run (plan)
-    python step_2_llm_verify.py --benchmark-dir ../benchmark --run             # all missing
-    python step_2_llm_verify.py --benchmark-dir ../benchmark --run --slugs A B # subset
-    python step_2_llm_verify.py --benchmark-dir ../benchmark --run --force     # re-judge all
+    python step_2_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark                   # dry run (plan)
+    python step_2_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run             # all missing
+    python step_2_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run --slugs A B # subset
+    python step_2_llm_verify.py --benchmark-dir ../../evaluate/ambig_ds_metric/benchmark --run --force     # re-judge all
 
 The default judge model is `AMBIG_VERIFIER_MODEL` (falls back to
 `AMBIG_LLM_MODEL`, then to `gpt-4o-mini`). To match the paper's
