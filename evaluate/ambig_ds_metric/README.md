@@ -560,7 +560,7 @@ cd <repo-root>
 cat > .env << 'EOF'
 OPENAI_API_KEY="sk-..."
 OPENAI_BASE_URL="https://api.openai.com/v1"   # optional; any compatible gateway
-AMBIG_LLM_MODEL="gpt-4o-mini"                 # optional; default model for creator pipelines
+AMBIG_LLM_MODEL="gpt-4o-mini"                 # optional; default model for LLM judge / answerer
 EOF
 $EDITOR .env             # set OPENAI_API_KEY, OPENAI_BASE_URL, etc.
 set -a && source .env && set +a

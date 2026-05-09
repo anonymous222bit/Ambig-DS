@@ -110,9 +110,7 @@ directly with the modeling task as instructed above.
 
 
 def _load_manifest(benchmark_dir: Path) -> dict:
-    manifest_path = benchmark_dir / "prompts" / "_metric_manifest.json"
-    if not manifest_path.exists():
-        manifest_path = benchmark_dir / "metric_manifest.json"
+    manifest_path = benchmark_dir / "metric_manifest.json"
     if not manifest_path.exists():
         sys.exit(f"metric manifest missing: {manifest_path}")
     return json.loads(manifest_path.read_text())

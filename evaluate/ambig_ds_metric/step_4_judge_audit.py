@@ -50,9 +50,11 @@ def load_tasks(benchmark_dir: Path) -> list[str]:
 
 
 def load_manifest(benchmark_dir: Path) -> dict[str, dict]:
-    manifest_path = benchmark_dir / "prompts" / "_metric_manifest.json"
+    manifest_path = benchmark_dir / "metric_manifest.json"
     if not manifest_path.exists():
-        manifest_path = benchmark_dir / "metric_manifest.json"
+        manifest_path_alt = benchmark_dir / "prompts" / "_metric_manifest.json"
+        if manifest_path_alt.exists():
+            manifest_path = manifest_path_alt
     raw = json.loads(manifest_path.read_text())
     return {k: v for k, v in raw.items() if not k.startswith("_")}
 

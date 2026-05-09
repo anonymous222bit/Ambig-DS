@@ -6,6 +6,7 @@
 #   2. Generate : (optional) re-generate ambig_metric.md prompts with an LLM
 #   3. Audit    : (optional) verify all redacted prompts are clean of metric leaks
 #   4. Run      : execute an LLM agent on full + ambig_metric variants
+#                  (--skip-existing: won't re-run tasks that already have _grade.json)
 #   5. Judge    : (optional) LLM-classify what metric the agent optimized
 #
 # Usage:
@@ -24,7 +25,14 @@ BENCH_DIR="${1:-./benchmark}"
 MODEL="${2:-gpt-4o-mini}"
 TASKS="${3:-all}"
 
-AGENT_BIN="${AGENT_BIN:-opencode}"
+AGENT_BIN="${AGENT_BIN:-}"
+if [[ -z "$AGENT_BIN" ]]; then
+  if [[ -x "$HOME/.npm-global/bin/opencode" ]]; then
+    AGENT_BIN="$HOME/.npm-global/bin/opencode"
+  else
+    AGENT_BIN="opencode"
+  fi
+fi
 BASE_URL="${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
