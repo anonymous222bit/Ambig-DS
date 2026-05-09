@@ -51,6 +51,7 @@ export AMBIG_DSBENCH_ROOT=/path/to/workspace      # contains Dataset/, DSBench/
 cd pipeline_DSBench
 python step_1_generate_decoy.py        --tasks_csv ... --src_data_root ... --out_root ...
 python step_2_generate_ambig_prompts.py --slug <slug> --env-file /path/to/.env
+python step_2b_llm_verify.py            --tasks_csv ... --run --env-file /path/to/.env  # optional
 python step_4_build_release.py          --out ./release --tasks <slug>
 python step_5_upload_to_hf.py           --skip-build --out ./release   # optional
 ```
@@ -66,6 +67,7 @@ create_datasets/ambig_ds_target/
     ├── _llm_client.py                 # shared OpenAI-compatible client
     ├── step_1_generate_decoy.py       # rank-map + bisected noise calibration
     ├── step_2_generate_ambig_prompts.py  # LLM rewrite: task.txt -> task_ambig.txt
+    ├── step_2b_llm_verify.py              # LLM verification of ambig prompts
     ├── step_3_audit.py                # release audit (5 invariants per task)
     ├── step_4_build_release.py        # assemble HF-shaped release/ tree
     ├── step_5_upload_to_hf.py         # push release/ to HuggingFace

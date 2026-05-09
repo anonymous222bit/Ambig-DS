@@ -25,8 +25,7 @@ and 3 there) — that's where you go after consuming the HF release.
 | step | script                              | purpose                                                                                  |
 |------|-------------------------------------|------------------------------------------------------------------------------------------|
 | 1    | `step_1_generate_decoy.py`          | rank-map + bisected noise calibration → write `train/test/sample_submission.csv` + `_manifest.json` per task |
-| 2    | `step_2_generate_ambig_prompts.py`  | LLM rewrite of the upstream DSBench task prompt → `ambig_prompt.txt` (target-ambig variant) |
-| 3    | `step_3_audit.py`                   | end-to-end release audit: pipeline integrity, prompt invariants, data invariants, eval scripts, manifests. **Skip for dsbench-only repros** — it expects a `competitions/<slug>/` directory from the `kaggle_2026` wave and crashes with `FileNotFoundError` if absent. |
+| 2    | `step_2_generate_ambig_prompts.py`  | LLM rewrite of the upstream DSBench task prompt → `ambig_prompt.txt` (target-ambig variant) || 2b   | `step_2b_llm_verify.py`            | LLM verification of ambig prompts against a 4-item retention checklist (no target-name leak, no feature-name leak, no two-target disclosure, no uncited numerics). Dry-run by default; pass `--run` to call the LLM. || 3    | `step_3_audit.py`                   | end-to-end release audit: pipeline integrity, prompt invariants, data invariants, eval scripts, manifests. **Skip for dsbench-only repros** — it expects a `competitions/<slug>/` directory from the `kaggle_2026` wave and crashes with `FileNotFoundError` if absent. |
 | 4    | `step_4_build_release.py`           | build the public, HF-shaped `release/` tree (no upload). Output is byte-identical to what gets pushed to HuggingFace and is directly consumable by the evaluator (`evaluate/ambig_ds_target/step_1_setup_benchmark.py --release-source local`). |
 | 5    | `step_5_upload_to_hf.py`            | push `release/` to HuggingFace                                                          |
 
@@ -178,6 +177,21 @@ correspondingly flags any disclosure phrase (`candidate target`,
 `decoy`, `ambiguous`, …) and any uncited numeric fact. Warnings printed
 to stdout are advisory; the file is still written.
 
+### 3b. (Optional) Verify the ambig prompt (LLM judge)
+
+```bash
+python step_2b_llm_verify.py \
+    --tasks_csv $SPEC \
+    --run \
+    --env-file  $ENV_FILE
+```
+
+Checks each `ambig_prompt.txt` against a 4-item retention checklist
+(no target-name leak, no feature-name leak, no two-target disclosure,
+no uncited numerics). Without `--run` it performs a dry-run plan only.
+Results go to `$WORKSPACE/final_data_v3/target_ambig/_verify/`.
+For the paper's 3-judge majority-vote protocol, add `--n-judges 3`.
+
 ### 4. Build the public release directory
 
 ```bash
@@ -279,6 +293,7 @@ If you adapt this pipeline for the multi-target case, the extension point is
 |------------------------------------|------|
 | `step_1_generate_decoy.py`         | rank-mapping + per-task bisected noise calibration + dtype snap |
 | `step_2_generate_ambig_prompts.py` | LLM rewrite of upstream DSBench task prompt → target-ambig variant |
+| `step_2b_llm_verify.py`            | LLM verification of ambig prompts (4-item retention checklist) |
 | `step_3_audit.py`                  | end-to-end release audit (5 invariants per task) |
 | `step_4_build_release.py`          | assemble HF-shaped `release/` tree locally (no upload) |
 | `step_5_upload_to_hf.py`           | thin wrapper: rebuild + push `release/` to HuggingFace |

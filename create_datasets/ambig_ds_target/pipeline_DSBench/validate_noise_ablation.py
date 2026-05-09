@@ -8,7 +8,7 @@ with the higher quick-CV signal).
 
 For each noise level L (e.g. 0, 5, 10, 20):
 
-  1. Calls `step_3b_strong_decoy_generator.py` for every task in the
+  1. Calls `step_1_generate_decoy.py` for every task in the
      supplied --tasks_csvs into a fresh directory
         <out_root>/ablation/n{LL}/
      so the canonical `target_ambig/data/` tree is **never** touched.
@@ -53,7 +53,7 @@ from scipy import stats
 warnings.filterwarnings("ignore", category=UserWarning)
 
 REPO = Path(os.environ.get("AMBIG_DSBENCH_ROOT", Path.cwd())).resolve()
-STEP_3B = Path(__file__).resolve().parent / "step_3b_v2_calibrated_decoy.py"
+STEP_3B = Path(__file__).resolve().parent / "step_1_generate_decoy.py"
 DEFAULT_SRC = (REPO / "Dataset" / "data_modeling" / "data" / "data"
                / "data_resplit")
 

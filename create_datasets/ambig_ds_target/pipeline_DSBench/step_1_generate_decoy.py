@@ -461,8 +461,20 @@ def snap_to_truth_dtype(val_2, y_true, target_type):
 
 def diag_correlation(y_true, y_decoy, target_type):
     if target_type == "classification":
-        # accuracy as a "how predictive of true is the decoy" sanity check
-        return ("match_rate", float((np.asarray(y_true) == np.asarray(y_decoy)).mean()))
+        # Cohen's kappa: chance-adjusted agreement between truth and decoy.
+        # Raw match_rate is ~0.50 for binary tasks even with a random
+        # permutation, making the 0.30 correlation cap structurally
+        # impossible. Kappa adjusts for the expected agreement under
+        # the marginal class distribution, so a random decoy scores ~0
+        # (same interpretive scale as Pearson for regression).
+        y_t = np.asarray(y_true)
+        y_d = np.asarray(y_decoy)
+        match = float((y_t == y_d).mean())
+        # expected agreement under independence (preserve per-class freq)
+        classes = np.unique(np.concatenate([y_t, y_d]))
+        pe = sum((y_t == c).mean() * (y_d == c).mean() for c in classes)
+        kappa = (match - pe) / (1.0 - pe) if pe < 1.0 else 0.0
+        return ("kappa", float(kappa))
     return ("pearson", float(np.corrcoef(np.asarray(y_true, dtype=float),
                                          np.asarray(y_decoy, dtype=float))[0, 1]))
 
