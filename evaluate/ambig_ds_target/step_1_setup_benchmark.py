@@ -47,14 +47,14 @@ Usage
     # Path A: from HF
     python step_1_setup_benchmark.py \
         --benchmark-dir ./benchmark \
-        --dsbench-data-root /path/to/Dataset/data_modeling/data/data
+        --dsbench-data-root /path/to/DSBench/data_modeling/data
 
     # Path B: from a local pipeline build
     python step_1_setup_benchmark.py \
         --benchmark-dir ./benchmark \
         --release-source local \
         --release-path /path/to/pipeline_DSBench/release \
-        --dsbench-data-root /path/to/Dataset/data_modeling/data/data
+        --dsbench-data-root /path/to/DSBench/data_modeling/data
 
     # Just verify
     python step_1_setup_benchmark.py --benchmark-dir ./benchmark --verify-only
@@ -191,10 +191,15 @@ def copy_full_csvs(slug: str, dsbench_root: Path, benchmark_dir: Path) -> bool:
         if not (dst / n).exists():
             shutil.copy2(src / n, dst / n)
 
-    # sample_submission: some upstream tasks use camelCase naming.
+    # sample_submission: some upstream tasks use camelCase naming,
+    # others use entirely different names (e.g. gender_submission.csv).
     sub_src_name = "sample_submission.csv"
     if not (src / sub_src_name).exists():
         sub_src_name = "sampleSubmission.csv"
+    if not (src / sub_src_name).exists():
+        candidates = list(src.glob("*[Ss]ubmission*.csv"))
+        if candidates:
+            sub_src_name = candidates[0].name
     if not (src / sub_src_name).exists():
         print(f"  [{slug}] FULL: missing sample_submission.csv in {src}")
         return False
@@ -484,8 +489,8 @@ def main():
                          "step_4_build_release.py) when --release-source=local")
     ap.add_argument("--dsbench-data-root",
                     default=os.environ.get("DSBENCH_DATA_ROOT", ""),
-                    help="Path to upstream DSBench's `Dataset/data_modeling/"
-                         "data/data` (must contain `data_resplit/<slug>/...`). "
+                    help="Path to upstream DSBench's `data_modeling/data` "
+                         "(must contain `data_resplit/<slug>/...`). "
                          "Falls back to $DSBENCH_DATA_ROOT.")
     ap.add_argument("--dsbench-perf-root",
                     default=os.environ.get("DSBENCH_PERF_ROOT", ""),

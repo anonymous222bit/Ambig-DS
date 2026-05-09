@@ -29,6 +29,7 @@ After `step_1_setup_benchmark.py`:
 ├── baselines/<slug>/{gt.txt, baseline.txt}   # for RPG normalization
 ├── workspaces/<run-name>/<slug>/   # per-task agent workspace (transient)
 ├── results/<run-name>/             # per-task outputs + _runlog.jsonl
+├── audits/<slug>/                  # steps 2–3 quality / inferability audits
 └── task_list.txt
 ```
 
@@ -234,12 +235,6 @@ for VARIANT in full ambig_target; do
         --skip-existing
   done
 done
-```
-
-Or use the wrapper:
-
-```bash
-MODEL=gemini_3_flash ./run_clarify_only_4way.sh
 ```
 
 Result directories produced:
