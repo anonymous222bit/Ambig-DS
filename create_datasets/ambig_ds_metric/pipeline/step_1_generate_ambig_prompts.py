@@ -124,16 +124,16 @@ def load_metrics_csv(benchmark_dir: Path) -> dict[str, dict]:
 
 
 def load_manifest(benchmark_dir: Path) -> dict:
-    manifest_path = benchmark_dir / "prompts" / "_metric_manifest.json"
+    manifest_path = benchmark_dir / "metric_manifest.json"
     if not manifest_path.exists():
-        manifest_path = benchmark_dir / "metric_manifest.json"
+        manifest_path = benchmark_dir / "prompts" / "_metric_manifest.json"
     if manifest_path.exists():
         return json.loads(manifest_path.read_text())
     return {}
 
 
 def save_manifest(manifest: dict, benchmark_dir: Path) -> None:
-    manifest_path = benchmark_dir / "prompts" / "_metric_manifest.json"
+    manifest_path = benchmark_dir / "metric_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=4, ensure_ascii=False) + "\n")
 
 
