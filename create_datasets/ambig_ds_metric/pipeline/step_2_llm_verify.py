@@ -16,14 +16,14 @@ Output (per slug):
     <bench>/_verify/rejected.txt     slugs that failed any check (one per line)
 
 The script never edits prompts or the manifest; it only emits judgements.
-Step 4 (upload) reads `_verify/_summary.json` if present and refuses to
+Step 3 (upload) reads `_verify/_summary.json` if present and refuses to
 upload slugs flagged as failed unless `--allow-failed` is given.
 
 Usage:
-    python step_3_llm_verify.py --benchmark-dir ../benchmark                   # dry run (plan)
-    python step_3_llm_verify.py --benchmark-dir ../benchmark --run             # all missing
-    python step_3_llm_verify.py --benchmark-dir ../benchmark --run --slugs A B # subset
-    python step_3_llm_verify.py --benchmark-dir ../benchmark --run --force     # re-judge all
+    python step_2_llm_verify.py --benchmark-dir ../benchmark                   # dry run (plan)
+    python step_2_llm_verify.py --benchmark-dir ../benchmark --run             # all missing
+    python step_2_llm_verify.py --benchmark-dir ../benchmark --run --slugs A B # subset
+    python step_2_llm_verify.py --benchmark-dir ../benchmark --run --force     # re-judge all
 
 The default judge model is `AMBIG_VERIFIER_MODEL` (falls back to
 `AMBIG_LLM_MODEL`, then to `gpt-4o-mini`). To match the paper's

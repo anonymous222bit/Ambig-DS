@@ -197,13 +197,13 @@ def stage(benchmark_dir: Path, staging_dir: Path,
     if require_verify and not verdicts:
         raise SystemExit(
             "--require-verify set but no _verify/_summary.json found. "
-            "Run step_3_llm_verify.py first.")
+            "Run step_2_llm_verify.py first.")
     if verdicts and not allow_failed:
         failed = [s for s in slugs if verdicts.get(s) == "fail"]
         if failed:
             raise SystemExit(
                 f"{len(failed)} slug(s) failed LLM verification: {failed}. "
-                f"Re-run step_3_llm_verify.py, fix the prompts, or pass "
+                f"Re-run step_2_llm_verify.py, fix the prompts, or pass "
                 f"--allow-failed to override.")
 
     # 1. task_list.txt
@@ -283,7 +283,7 @@ def main():
     ap.add_argument("--repo-id", default=REPO_ID,
                     help=f"HuggingFace repo ID (default: {REPO_ID})")
     ap.add_argument("--allow-failed", action="store_true",
-                    help="Stage even slugs that failed step_3_llm_verify.py.")
+                    help="Stage even slugs that failed step_2_llm_verify.py.")
     ap.add_argument("--require-verify", action="store_true",
                     help="Refuse to stage if no verifier summary is present.")
     args = ap.parse_args()
