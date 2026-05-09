@@ -165,13 +165,18 @@ def answer_clarify_target(*, question: str, task_name: str,
                           true_target_column: str, original_target_name: str,
                           target_type: str, model: str, api_key: str,
                           base_url: str, variant: str = "ambig_target",
-                          max_tokens: int = 200,
+                          max_tokens: int = 1200,
                           temperature: float = 0.2) -> dict[str, Any]:
     """Call the target-aware answerer LLM. Returns {answer, raw, refused}.
 
     ``variant`` selects the system prompt:
       - "ambig_target": uses TARGET_SYSTEM_PROMPT (val_1/val_2 disclosure).
       - "full": uses FULL_SYSTEM_PROMPT (no decoy/ambig context).
+
+    Note on max_tokens: 1200 is high enough to accommodate reasoning models
+    (e.g. gemini_3_flash, o-series) that consume hundreds of hidden reasoning
+    tokens before producing visible text. Older non-reasoning models will use
+    only the ~30-50 tokens needed for a 1-2 sentence reply.
     """
     if not question or question.strip().upper() == "NONE":
         return {"answer": "NONE", "refused": False, "raw": ""}
@@ -195,5 +200,12 @@ def answer_clarify_target(*, question: str, task_name: str,
         temperature=temperature,
     )
     text = (resp.choices[0].message.content or "").strip()
+    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+    if not text and finish_reason == "length":
+        text = (
+            "(answerer hit max_tokens before producing visible text — "
+            "likely a reasoning model with too small a budget; "
+            "raise clarify_answerer.answer_clarify_target(max_tokens=...).)"
+        )
     refused = text.startswith("REFUSE:")
-    return {"answer": text, "refused": refused, "raw": user_msg}
+    return {"answer": text, "refused": refused, "raw": user_msg, "finish_reason": finish_reason}

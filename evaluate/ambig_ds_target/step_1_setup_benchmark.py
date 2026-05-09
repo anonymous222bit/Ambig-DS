@@ -404,6 +404,11 @@ def rebuild_ambig_csvs(slug: str, release: Path, dsbench_root: Path,
                   .get("seeds", {}).get("master", 0),
                   "decoy": decoy_seed},
     }
+    # Preserve the diagnostics block from the release manifest so that
+    # step_2 / step_3 (which read from data/<slug>/ambig/_manifest.json)
+    # have access to the pre-computed HistGradientBoosting CV scores.
+    if "diagnostics" in manifest_raw:
+        local_manifest["diagnostics"] = manifest_raw["diagnostics"]
     (ambig_out / "_manifest.json").write_text(
         json.dumps(local_manifest, indent=2))
     return True

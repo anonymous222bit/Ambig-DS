@@ -322,6 +322,14 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
     }
     (out_task / "_traj.json").write_text(json.dumps(traj, indent=2))
 
+    # Dump tool-call inputs into the workspace so that step_7_target_audit
+    # can classify which target the agent used even when the agent ran code
+    # inline (via tool calls) without writing .py files to the workspace.
+    tool_code = "\n".join(
+        tu.get("input", "") for tu in toolsC if tu.get("input"))
+    if tool_code.strip():
+        (ws / "_tool_calls.txt").write_text(tool_code)
+
     sub_in_ws = find_submission(ws)
     if sub_in_ws is not None:
         sub_dest = out_task / SUBMISSION_NAME

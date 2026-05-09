@@ -121,10 +121,14 @@ def run_opencode(
                     message_parts.append(txt)
             elif etype in ("tool_use", "tool"):
                 state = part.get("state") if isinstance(part.get("state"), dict) else {}
+                # The tool command lives at part.state.input.command in
+                # opencode's JSONL schema.
+                state_input = state.get("input") if isinstance(state.get("input"), dict) else {}
                 tool_uses.append({
                     "name": part.get("tool") or part.get("name"),
                     "id": part.get("id"),
                     "state": state.get("status"),
+                    "input": state_input.get("command", ""),
                 })
             elif etype == "step_finish":
                 c = part.get("cost")

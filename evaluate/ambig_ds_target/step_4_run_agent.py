@@ -218,19 +218,17 @@ def grade(sub_path: Path, slug: str, benchmark_dir: Path,
         try:
             df = pd.read_csv(sub_path)
             if target_name not in df.columns:
-                # Try common fallback column names agents may produce.
-                for cand in ("prediction", "target", "val_1", "val_2"):
-                    if cand in df.columns:
-                        df = df.rename(columns={cand: target_name})
-                        rename_info = {cand: target_name}
-                        break
-                else:
-                    # Case-insensitive match as last resort.
-                    lower = {c.lower(): c for c in df.columns}
-                    if target_name.lower() in lower:
-                        src_col = lower[target_name.lower()]
+                # Build a normalized lookup: strip whitespace, lowercase.
+                col_norm = {c.strip().lower(): c for c in df.columns}
+                # Try the original target name (case-insensitive) first,
+                # then common fallback column names agents may produce.
+                for cand in (target_name.lower(), "prediction", "target",
+                             "val_1", "val_2"):
+                    if cand in col_norm:
+                        src_col = col_norm[cand]
                         df = df.rename(columns={src_col: target_name})
                         rename_info = {src_col: target_name}
+                        break
                 if rename_info:
                     graded_sub = out_dir / "_submission_for_grader.csv"
                     df.to_csv(graded_sub, index=False)
@@ -365,6 +363,14 @@ def run_one(slug: str, variant: str, model: str, args, run_dir: Path,
             "elapsed_sec": elapsed, "iterations": iters, "cost": cost,
             "summary": message, "tool_uses": tool_uses, "timed_out": timed_out}
     (out_task / "_traj.json").write_text(json.dumps(traj, indent=2))
+
+    # Dump tool-call inputs into the workspace so that step_7_target_audit
+    # can classify which target the agent used even when the agent ran code
+    # inline (via tool calls) without writing .py files to the workspace.
+    tool_code = "\n".join(
+        tu.get("input", "") for tu in tool_uses if tu.get("input"))
+    if tool_code.strip():
+        (ws / "_tool_calls.txt").write_text(tool_code)
 
     sub_in_ws = find_submission(ws)
     if sub_in_ws is not None:
