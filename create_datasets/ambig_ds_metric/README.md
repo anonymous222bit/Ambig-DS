@@ -164,7 +164,7 @@ python pipeline/step_3_upload_to_hf.py \
 
 The stager copies (in this order): `task_list.txt`, `metric_manifest.json`
 (stripping any `_doc` key, attaching `validated_alternatives` from the
-step-2 verifier when present),
+step-2 LLM verifier when present),
 `metrics_classified.csv` (optional — included if present),
 `edits_log.md` (optional — looked up at `<bench>/edits_log.md` or
 `<bench>/prompts/EDITS_LOG.md` for backward compatibility),

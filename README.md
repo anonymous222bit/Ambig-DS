@@ -108,7 +108,7 @@ opencode --version
 ### 5. Project `.env` and run the pipelines
 
 ```bash
-cp .env.example .env && $EDITOR .env
+# create .env if you haven't already (see Configuration section below)
 set -a && source .env && set +a
 
 # Metric track
@@ -145,12 +145,16 @@ source it before running anything.
 
 ### 1. Create the file
 
-A template is provided at [`.env.example`](.env.example). Copy it and fill
-in the blanks:
+Create a `.env` file at the repo root with the variables below:
 
 ```bash
-cp .env.example .env
-$EDITOR .env             # fill in API keys, paths, etc.
+cat > .env << 'EOF'
+OPENAI_API_KEY="sk-..."
+OPENAI_BASE_URL="https://api.openai.com/v1"   # optional; any compatible gateway
+AMBIG_LLM_MODEL="gpt-4o-mini"                 # optional; default model for creator pipelines
+# HF_TOKEN="hf_..."                            # only for HuggingFace upload steps
+EOF
+$EDITOR .env             # fill in your actual keys
 ```
 
 ### 2. Load it into your shell

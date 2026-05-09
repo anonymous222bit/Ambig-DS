@@ -164,7 +164,8 @@ automatically operate on the full set without any extra flag.
 > **Disk note.** Full 61-task Kaggle data is ~63 GB downloaded and
 > ~150–200 GB after `mlebench prepare` extracts and resplits.
 > For smoke tests, prepare only a few small tasks
-> (`random-acts-of-pizza` ~5 MB, `aerial-cactus-identification` ~12 MB,
+> (`random-acts-of-pizza` ~5 MB,
+> `detecting-insults-in-social-commentary` ~1 MB,
 > `spooky-author-identification` ~2.3 MB).
 
 ### Step 2 — `step_2_run_agent.py`
