@@ -240,6 +240,27 @@ def add_label_noise_regression(val_2, sigma_frac, seed):
     return out
 
 
+def partial_shuffle(val_2, frac, seed):
+    """Randomly shuffle `frac` of values in-place. Preserves marginal exactly.
+
+    Unlike add_label_noise_regression (which re-rank-maps and thus preserves
+    feature-predictability), this directly breaks the positional link between
+    the decoy and the features it was built from.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(val_2)
+    k = max(2, int(n * frac))
+    out = val_2.copy()
+    if k >= n:
+        rng.shuffle(out)
+        return out
+    idx = rng.choice(n, k, replace=False)
+    block = out[idx].copy()
+    rng.shuffle(block)
+    out[idx] = block
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Fix A: per-task noise calibration (binary search on noise level)
 # ---------------------------------------------------------------------------
@@ -314,6 +335,62 @@ def calibrate_noise(val_2_raw, X_num, y_true, target_type, seed,
         else:
             return v_mid, mid, cv_mid, trace
     return best_v, best_level, best_cv, trace
+
+
+# ---------------------------------------------------------------------------
+# Fix A2: shuffle fallback for regression when noise bisection fails
+# ---------------------------------------------------------------------------
+
+def calibrate_shuffle(val_2_noised, X_num, y_true, target_type, seed,
+                      cv_true, cv_tolerance, max_cv_rows,
+                      n_steps=8):
+    """Bisect on shuffle fraction when noise bisection alone can't close the gap.
+
+    For regression tasks, add_label_noise_regression re-rank-maps noised values
+    onto the sorted truth marginal. This preserves much of the original
+    feature-decoy correlation because the rank order is only partially
+    perturbed. When the residual cv_decoy is far above cv_true even at
+    max_noise, partial shuffling directly breaks the positional link.
+
+    Returns (val_2_shuffled, shuffle_frac, cv_decoy, trace).
+    """
+    if cv_true is None or np.isnan(cv_true):
+        return None, None, None, []
+
+    def cv_at(frac):
+        v = partial_shuffle(val_2_noised, frac, seed)
+        return v, quick_cv(X_num, v, target_type=target_type,
+                           max_rows=max_cv_rows, seed=seed)
+
+    trace = []
+    lo, hi = 0.0, 1.0
+
+    v_lo, cv_lo = cv_at(lo)
+    trace.append((lo, cv_lo))
+    if abs(cv_lo - cv_true) <= cv_tolerance:
+        return v_lo, lo, cv_lo, trace
+
+    v_hi, cv_hi = cv_at(hi)
+    trace.append((hi, cv_hi))
+
+    best_v, best_frac, best_cv = v_lo, lo, cv_lo
+    if abs(cv_hi - cv_true) < abs(best_cv - cv_true):
+        best_v, best_frac, best_cv = v_hi, hi, cv_hi
+
+    for _ in range(n_steps):
+        mid = 0.5 * (lo + hi)
+        v_mid, cv_mid = cv_at(mid)
+        trace.append((mid, cv_mid))
+        if abs(cv_mid - cv_true) < abs(best_cv - cv_true):
+            best_v, best_frac, best_cv = v_mid, mid, cv_mid
+        if abs(cv_mid - cv_true) <= cv_tolerance:
+            return v_mid, mid, cv_mid, trace
+        if cv_mid > cv_true + cv_tolerance:
+            lo = mid  # still too learnable -> shuffle more
+        else:
+            hi = mid  # too shuffled -> back off
+
+    return best_v, best_frac, best_cv, trace
 
 
 # ---------------------------------------------------------------------------
@@ -601,6 +678,32 @@ def process_task(task_row, args, master_rng):
             )
         cv_decoy = quick_cv(X_tr_num, val_2, target_type=target_type,
                             max_rows=args.max_cv_rows, seed=args.seed)
+
+    # ---- Fix A2: shuffle fallback for regression -----------------------
+    # add_label_noise_regression re-rank-maps noised values onto the sorted
+    # truth marginal, which preserves feature-predictability even at high
+    # noise. When bisection fails to close the gap for regression tasks
+    # (cv_decoy still far above cv_true), partially shuffle the decoy to
+    # directly break the positional feature-decoy correlation.
+    if (not use_random_permutation
+            and not bisection_converged
+            and target_type == "regression"
+            and cv_true is not None and not np.isnan(cv_true)
+            and cv_decoy > cv_true + args.cv_tolerance):
+        print(f"  [shuffle-fallback] {task}: noise bisection failed "
+              f"(cv_ratio={cv_decoy / cv_true:.2f}); trying shuffle calibration")
+        shuf_v2, shuf_frac, shuf_cv, shuf_trace = calibrate_shuffle(
+            val_2, X_tr_num, y_tr, target_type=target_type,
+            seed=decoy_seed, cv_true=cv_true,
+            cv_tolerance=args.cv_tolerance, max_cv_rows=args.max_cv_rows,
+        )
+        if shuf_v2 is not None and abs(shuf_cv - cv_true) < abs(cv_decoy - cv_true):
+            val_2 = shuf_v2
+            cv_decoy = shuf_cv
+            bisection_converged = abs(shuf_cv - cv_true) <= args.cv_tolerance
+            print(f"  [shuffle-fallback] improved: cv_decoy={shuf_cv:.3f} "
+                  f"(shuffle_frac={shuf_frac:.3f}, "
+                  f"cv_ratio={shuf_cv / cv_true:.2f})")
 
     # ---- Fix B: snap decoy back to truth dtype / precision --------------
     if args.apply_dtype_snap:

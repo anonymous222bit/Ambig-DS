@@ -98,8 +98,8 @@ ENV_FILE=/path/to/your/.env                # OPENAI_API_KEY + OPENAI_BASE_URL
 export AMBIG_DSBENCH_ROOT=$WORKSPACE
 
 # Mirror the upstream DSBench data tree
-mkdir -p $WORKSPACE
-cp -r $DSBENCH_CLONE/data_modeling/data $WORKSPACE/Dataset/data_modeling/data/data
+mkdir -p $WORKSPACE/Dataset/data_modeling/data/data
+cp -r $DSBENCH_CLONE/data_modeling/data/* $WORKSPACE/Dataset/data_modeling/data/data/
 
 # Mirror the eval scripts (step 4 looks here)
 mkdir -p $WORKSPACE/DSBench/data_modeling/evaluation
