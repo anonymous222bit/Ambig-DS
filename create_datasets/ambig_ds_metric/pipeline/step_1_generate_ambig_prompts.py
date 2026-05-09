@@ -40,8 +40,8 @@ everything else identical.
 RULES — follow these EXACTLY:
 
 1. EVALUATION SECTION: Find the Evaluation / Metric section (usually under ## Evaluation
-   or ### Evaluation). Replace its BODY with exactly this single sentence:
-   "Submissions are scored against the held-out ground truth on this task."
+   or ### Evaluation). Replace its BODY with a single neutral sentence indicating that
+   submissions are evaluated against held-out data, without naming any specific metric.
    Keep the section header itself so the prompt structure is identical.
 
 2. INLINE METRIC MENTIONS: Search the ENTIRE document for any other mentions of the

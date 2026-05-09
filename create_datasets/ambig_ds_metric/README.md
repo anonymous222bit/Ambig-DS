@@ -136,6 +136,15 @@ Useful flags: `--slugs A B` (subset), `--force` (re-judge even when
 `<slug>.json` already exists), `--out-tag <tag>` (alternate output
 directory).
 
+> **Note on the HF release:** The `_verify/rejected.txt` shipped with
+> [`anonymous222bit/Ambig-DS-M`](https://huggingface.co/datasets/anonymous222bit/Ambig-DS-M)
+> contains `jigsaw-unintended-bias-in-toxicity-classification`, which
+> initially failed LLM verification. A human judge reviewed the prompt,
+> confirmed the redaction was correct, and the per-slug verdict was
+> updated to `pass` (reflected in `_summary.json`, 61/61 pass).
+> `rejected.txt` was not regenerated after that override. The canonical
+> source of truth is `_summary.json`.
+
 ### Step 3 — `step_3_upload_to_hf.py`
 
 Stage the dataset (everything except `data/`, which is the user-downloaded
