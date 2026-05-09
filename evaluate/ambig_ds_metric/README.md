@@ -551,11 +551,15 @@ opencode --version                           # 1.14.39 verified
 
 ### 0.5 — Project `.env`
 
-The repo root ships [`.env.example`](../../.env.example). Copy and fill in:
+Create a `.env` file at the repo root with your API keys:
 
 ```bash
 cd <repo-root>
-cp .env.example .env
+cat > .env << 'EOF'
+OPENAI_API_KEY="sk-..."
+OPENAI_BASE_URL="https://api.openai.com/v1"   # optional; any compatible gateway
+AMBIG_LLM_MODEL="gpt-4o-mini"                 # optional; default model for creator pipelines
+EOF
 $EDITOR .env             # set OPENAI_API_KEY, OPENAI_BASE_URL, etc.
 set -a && source .env && set +a
 ```
