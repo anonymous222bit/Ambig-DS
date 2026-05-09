@@ -6,7 +6,7 @@ Standalone utility — grade a single submission or batch-grade a results direct
 Usage:
     # Grade one submission
     python grade_submission.py --benchmark-dir ./benchmark \\
-        --slug aerial-cactus-identification --submission ./my_submission.csv
+        --slug leaf-classification --submission ./my_submission.csv
 
     # Batch grade all submissions in a results directory
     python grade_submission.py --benchmark-dir ./benchmark \\

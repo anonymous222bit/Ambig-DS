@@ -18,7 +18,7 @@ Usage:
 
     # Ambiguous prompts, specific tasks
     python step_2_run_agent.py --benchmark-dir ./benchmark --variant ambig_metric --model gpt-4o \\
-        --tasks aerial-cactus-identification,dog-breed-identification
+        --tasks leaf-classification,dog-breed-identification
 
     # Dry run (build workspace, print prompt, don't call agent)
     python step_2_run_agent.py --benchmark-dir ./benchmark --variant full --model gpt-4o --dry-run
