@@ -14,7 +14,7 @@ Prerequisites:
 Usage:
     python step_1_setup_benchmark.py --benchmark-dir ./benchmark   # download everything
     python step_1_setup_benchmark.py --benchmark-dir ./benchmark --skip-data  # prompts only
-    python step_1_setup_benchmark.py --benchmark-dir ./benchmark --tasks aerial-cactus-identification,dog-breed-identification
+    python step_1_setup_benchmark.py --benchmark-dir ./benchmark --tasks leaf-classification,dog-breed-identification
 """
 from __future__ import annotations
 
@@ -96,7 +96,13 @@ def download_kaggle_data(benchmark_dir: Path, tasks: list[str] | None = None):
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
             if result.returncode != 0:
-                print(f"    FAILED: {result.stderr[-300:]}")
+                err = result.stderr[-500:]
+                if "SSL" in err or "CERTIFICATE_VERIFY_FAILED" in err:
+                    print(f"    FAILED (SSL): corporate TLS proxy? See README § 'Corporate TLS proxy'")
+                elif "PermissionError" in err or "authentication" in err.lower():
+                    print(f"    FAILED (auth): check ~/.kaggle/kaggle.json and accept rules on kaggle.com")
+                else:
+                    print(f"    FAILED: {err[-300:]}")
             else:
                 print(f"    OK")
         except subprocess.TimeoutExpired:
@@ -105,7 +111,7 @@ def download_kaggle_data(benchmark_dir: Path, tasks: list[str] | None = None):
             print(f"    ERROR: {e}")
 
 
-def verify(benchmark_dir: Path) -> bool:
+def verify(benchmark_dir: Path, only_tasks: list[str] | None = None) -> bool:
     """Verify benchmark is complete."""
     print(f"\n[3/3] Verifying benchmark...")
     task_list = benchmark_dir / "task_list.txt"
@@ -114,6 +120,8 @@ def verify(benchmark_dir: Path) -> bool:
         return False
 
     tasks = task_list.read_text().strip().splitlines()
+    if only_tasks:
+        tasks = [t for t in tasks if t in only_tasks]
     prompts_ok = 0
     data_ok = 0
     issues = []
@@ -183,17 +191,18 @@ def main():
     bd = args.benchmark_dir.resolve()
     bd.mkdir(parents=True, exist_ok=True)
 
+    task_subset = args.tasks.split(",") if args.tasks else None
+
     if args.verify_only:
-        verify(bd)
+        verify(bd, only_tasks=task_subset)
         return
 
     download_hf_dataset(bd, args.hf_repo)
 
     if not args.skip_data:
-        task_subset = args.tasks.split(",") if args.tasks else None
         download_kaggle_data(bd, task_subset)
 
-    verify(bd)
+    verify(bd, only_tasks=task_subset)
 
 
 if __name__ == "__main__":

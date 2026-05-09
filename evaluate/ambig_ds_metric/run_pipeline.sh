@@ -11,7 +11,7 @@
 # Usage:
 #   ./run_pipeline.sh <benchmark-dir> <model> [tasks]
 # Example:
-#   ./run_pipeline.sh ./benchmark gpt-4o aerial-cactus-identification,dog-breed-identification
+#   ./run_pipeline.sh ./benchmark gpt-4o leaf-classification,dog-breed-identification
 #
 # Environment:
 #   OPENAI_API_KEY   required
@@ -46,7 +46,7 @@ echo "=========================================================="
 
 # ── Step 1: Setup ─────────────────────────────────────────────
 echo
-echo "[1/5] Setup: downloading prompts (HF) + competition data (Kaggle)..."
+echo "[1/3] Setup: downloading prompts (HF) + competition data (Kaggle)..."
 SETUP_ARGS=(--benchmark-dir "$BENCH_DIR")
 if [[ "$TASKS" != "all" ]]; then
   SETUP_ARGS+=(--tasks "$TASKS")
@@ -57,7 +57,7 @@ fi
 # By default we use the prompts shipped on HF. Uncomment to regenerate.
 #
 # echo
-# echo "[2/5] Generating ambiguous prompts with LLM..."
+# echo "[1.5] (optional) Generating ambiguous prompts with LLM..."
 # "$PY" "$HERE/../../create_datasets/ambig_ds_metric/pipeline/step_1_generate_ambig_prompts.py" --benchmark-dir "$BENCH_DIR" --run
 
 # ── Step 3: (optional) Audit redacted prompts ─────────────────
@@ -67,7 +67,7 @@ fi
 
 # ── Step 4: Run agent on both variants ────────────────────────
 echo
-echo "[4/5] Running agent on FULL variant..."
+echo "[2/3] Running agent on FULL variant..."
 "$PY" "$HERE/step_2_run_agent.py" \
   --benchmark-dir "$BENCH_DIR" \
   --variant full \
@@ -78,7 +78,7 @@ echo "[4/5] Running agent on FULL variant..."
   --skip-existing
 
 echo
-echo "[4/5] Running agent on AMBIG_METRIC variant..."
+echo "[3/3] Running agent on AMBIG_METRIC variant..."
 "$PY" "$HERE/step_2_run_agent.py" \
   --benchmark-dir "$BENCH_DIR" \
   --variant ambig_metric \
@@ -92,7 +92,7 @@ echo "[4/5] Running agent on AMBIG_METRIC variant..."
 # Uncomment to run the judge audit.
 #
 # echo
-# echo "[5/5] Judging agent optimization targets..."
+# echo "[4] (optional) Judging agent optimization targets..."
 # "$PY" "$HERE/step_4_judge_audit.py" \
 #   --benchmark-dir "$BENCH_DIR" \
 #   --judge-model "$MODEL" \

@@ -25,7 +25,11 @@ evaluate/ambig_ds_metric/
 ├── step_1_setup_benchmark.py              Download HF prompts + run mlebench prepare
 ├── step_2_run_agent.py                    Build workspace → run agent → locate sub → grade
 ├── step_3_run_agent_clarify.py            Same, but with ASK→ANSWER→SOLVE clarify protocol
-└── step_4_judge_audit.py                  LLM judge classifying agent's optimisation target
+├── step_4_judge_audit.py                  LLM judge classifying agent's optimisation target
+├── normalize_scores.py                    Rescale raw scores to [0,1] leaderboard rank-pct
+├── fetch_leaderboards.py                  Download mle-bench leaderboard CSVs (Git LFS fallback)
+├── compile_audit_report.py                Compile per-task verify verdicts into CSV + markdown
+└── tests/                                 Unit tests for pipeline fixes
 ```
 
 ---
@@ -164,8 +168,7 @@ automatically operate on the full set without any extra flag.
 > **Disk note.** Full 61-task Kaggle data is ~63 GB downloaded and
 > ~150–200 GB after `mlebench prepare` extracts and resplits.
 > For smoke tests, prepare only a few small tasks
-> (`random-acts-of-pizza` ~5 MB,
-> `detecting-insults-in-social-commentary` ~1 MB,
+> (`random-acts-of-pizza` ~5 MB, `leaf-classification` ~3 MB,
 > `spooky-author-identification` ~2.3 MB).
 
 ### Step 2 — `step_2_run_agent.py`
@@ -346,10 +349,10 @@ AGENT_BIN=/path/to/opencode \
     ./run_pipeline.sh ./benchmark <model-id> <slug>
 ```
 
-The orchestrator runs Steps 1, 2 (audit, via the create-side script), 3
-(`full` then `ambig_metric` agent runs). Steps 1.5 (regenerate ambig
-prompts) and 4 (judge) are commented out by default and must be
-uncommented to enable.
+The orchestrator runs `step_1_setup_benchmark.py`, then
+`step_2_run_agent.py` twice (once for `full`, once for `ambig_metric`),
+both with `--skip-existing`.  Prompt regeneration and the LLM judge
+(Step 4) are commented out by default; uncomment to enable.
 
 ---
 
@@ -408,8 +411,7 @@ for V in full ambig_metric; do
     --variant "$V" \
     --model gemini_3_flash \
     --tasks "$TASK" \
-    --agent opencode \
-    --agent-bin "$(command -v opencode)" \
+    --agent-bin "$HOME/.npm-global/bin/opencode" \
     --base-url "$OPENAI_BASE_URL" \
     --timeout 900
 done
