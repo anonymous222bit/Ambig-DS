@@ -210,28 +210,44 @@ def grade(sub_path: Path, slug: str, benchmark_dir: Path,
     if not answers.exists():
         return {"error": f"test_answer.csv missing: {answers}"}
 
-    # Align submission column to whatever eval.py expects (the original target).
+    # Align submission columns to whatever eval.py expects.
+    # The ambig prompt uses generic "id" / "prediction" column names, but
+    # DSBench eval.py may expect the original column names (e.g.
+    # "PassengerId" and "Survived" for titanic).  We rename both the target
+    # column and the ID column when they don't match.
     graded_sub = sub_path
     rename_info = None
     target_name = _original_target_name(benchmark_dir, slug)
     if target_name:
         try:
             df = pd.read_csv(sub_path)
+            renames: dict[str, str] = {}
+
+            # --- target column ---
             if target_name not in df.columns:
-                # Build a normalized lookup: strip whitespace, lowercase.
                 col_norm = {c.strip().lower(): c for c in df.columns}
-                # Try the original target name (case-insensitive) first,
-                # then common fallback column names agents may produce.
                 for cand in (target_name.lower(), "prediction", "target",
                              "val_1", "val_2"):
                     if cand in col_norm:
-                        src_col = col_norm[cand]
-                        df = df.rename(columns={src_col: target_name})
-                        rename_info = {src_col: target_name}
+                        renames[col_norm[cand]] = target_name
                         break
-                if rename_info:
-                    graded_sub = out_dir / "_submission_for_grader.csv"
-                    df.to_csv(graded_sub, index=False)
+
+            # --- ID column ---
+            # Infer the expected ID column from test_answer.csv headers.
+            answer_cols = pd.read_csv(answers, nrows=0).columns.tolist()
+            id_col = next((c for c in answer_cols if c != target_name), None)
+            if id_col and id_col not in df.columns:
+                col_norm = {c.strip().lower(): c for c in df.columns}
+                if id_col.lower() in col_norm:
+                    renames[col_norm[id_col.lower()]] = id_col
+                elif "id" in col_norm:
+                    renames[col_norm["id"]] = id_col
+
+            if renames:
+                df = df.rename(columns=renames)
+                rename_info = renames
+                graded_sub = out_dir / "_submission_for_grader.csv"
+                df.to_csv(graded_sub, index=False)
         except Exception as e:
             return {"error": f"submission rename failed: {e}"}
 
