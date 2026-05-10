@@ -3,7 +3,7 @@
 # then run decoy-quality (step 2) and inferability (step 3) audits.
 #
 # Usage:
-#   ./run_full_pipeline.sh                 # all 53 tasks
+#   ./run_full_pipeline.sh                 # all 51 tasks
 #   FORCE=1 ./run_full_pipeline.sh         # delete ambig dirs first
 #   SKIP_LLM=0 ./run_full_pipeline.sh      # also run LLM selectors D/E/F
 #   ./run_full_pipeline.sh task1,task2     # subset by slug
