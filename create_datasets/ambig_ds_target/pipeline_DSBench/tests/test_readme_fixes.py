@@ -4,6 +4,7 @@
 2. step_2_generate_ambig_prompts.py docstring/Usage reference the correct filename.
 3. --model CLI flag takes precedence over AMBIG_LLM_MODEL env var.
 4. No internal paths (project_5, project_6) leaked into the README.
+5. step_2b verifier prompt does not blanket-ban val_1/val_2 column listings.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 PIPELINE = HERE.parent
 README = PIPELINE / "README.md"
 STEP2 = PIPELINE / "step_2_generate_ambig_prompts.py"
+STEP2B = PIPELINE / "step_2b_llm_verify.py"
 STEP1 = PIPELINE / "step_1_generate_decoy.py"
 
 
@@ -211,3 +213,44 @@ class TestNoInternalPaths:
         assert pattern not in readme_text, (
             f"README still contains internal path reference: '{pattern}'"
         )
+
+
+# ── Fix 5: step_2b verifier prompt must not blanket-ban val_1/val_2 ──────────
+
+class TestVerifierPromptVal12:
+    """step_2b VERIFY_SYSTEM must allow neutral val_1/val_2 column listings.
+
+    The HF release prompts list val_1 and val_2 in their Data Fields sections
+    (produced by step_2 rule #6). The verifier must not flag these as leaks.
+    It should only flag signposting phrases like 'candidate target val_1'.
+    """
+
+    @pytest.fixture(scope="class")
+    def verify_system(self):
+        return STEP2B.read_text()
+
+    def test_no_blanket_val12_ban(self, verify_system):
+        """The verifier must not list val_1/val_2 as unconditional cue leaks."""
+        # The old buggy line was:
+        #   mentions of "val_1", "val_2", "decoy", "ambiguous",
+        # which blanket-banned any mention of val_1/val_2.
+        assert 'mentions of "val_1", "val_2"' not in verify_system, (
+            "Verifier still has blanket ban on val_1/val_2 mentions — "
+            "this contradicts step_2 rule #6 and the HF release prompts"
+        )
+
+    def test_neutral_listing_accepted(self, verify_system):
+        """The verifier should explicitly say neutral column listings are OK."""
+        assert "neutral column listing" in verify_system.lower() or \
+               "acceptable" in verify_system.lower(), (
+            "Verifier should explicitly state that neutral val_1/val_2 "
+            "column listings in data-fields sections are acceptable"
+        )
+
+    def test_signposting_still_banned(self, verify_system):
+        """Signposting phrases like 'candidate target' must still be banned."""
+        lower = verify_system.lower()
+        for phrase in ("candidate target", "decoy", "signposting"):
+            assert phrase in lower, (
+                f"Verifier must still ban signposting phrase '{phrase}'"
+            )

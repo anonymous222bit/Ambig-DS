@@ -99,8 +99,16 @@ Apply the four-item retention checklist from the benchmark paper:
          (e.g. "rentals per hour", "house value");
        * explicit signposting that two candidate targets exist
          (the prompt must read as a single-target task);
-       * mentions of "val_1", "val_2", "decoy", "ambiguous",
-         "candidate target", "identify the target";
+       * signposting phrases such as "decoy", "ambiguous",
+         "candidate target", "identify the target",
+         "similar marginal", "true target";
+       * NOTE: neutral column listings in a Data Fields / Columns
+         section that mention val_1 and val_2 alongside f_NN
+         features are ACCEPTABLE — the agent would discover these
+         column names by reading the CSV anyway. Only flag val_1 /
+         val_2 if they appear in signposting context (e.g. "two
+         candidate targets val_1 and val_2", "choose between
+         val_1 and val_2");
        * leftover semantic feature names from the manifest's
          feature_map (the prompt must use only f_01..f_NN);
        * sample_submission.csv being mentioned (it must be absent
