@@ -5,6 +5,10 @@
 3. --model CLI flag takes precedence over AMBIG_LLM_MODEL env var.
 4. No internal paths (project_5, project_6) leaked into the README.
 5. step_2b verifier prompt does not blanket-ban val_1/val_2 column listings.
+6. Function-signature defaults in step_1 match CLI defaults.
+7. step_3_audit.py does not crash when competitions/ is absent.
+8. dsbench_51_tasks.csv ships all 51 tasks with correct columns.
+9. README references dsbench_51_tasks.csv and notes Appendix C differences.
 """
 from __future__ import annotations
 
@@ -22,6 +26,8 @@ README = PIPELINE / "README.md"
 STEP2 = PIPELINE / "step_2_generate_ambig_prompts.py"
 STEP2B = PIPELINE / "step_2b_llm_verify.py"
 STEP1 = PIPELINE / "step_1_generate_decoy.py"
+STEP3 = PIPELINE / "step_3_audit.py"
+TASKS_CSV = PIPELINE / "dsbench_51_tasks.csv"
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -254,3 +260,104 @@ class TestVerifierPromptVal12:
             assert phrase in lower, (
                 f"Verifier must still ban signposting phrase '{phrase}'"
             )
+
+
+# ── Fix 6: function-signature defaults match CLI ─────────────────────────────
+
+class TestFunctionSignatureDefaults:
+    """build_decoy() and calibrate_noise() defaults must match CLI argparse."""
+
+    def test_build_decoy_defaults(self):
+        sys.path.insert(0, str(PIPELINE))
+        try:
+            import importlib
+            s1 = importlib.import_module("step_1_generate_decoy")
+            import inspect
+            sig = inspect.signature(s1.build_decoy)
+            p = sig.parameters
+            assert p["pool_min"].default == 4
+            assert p["pool_max"].default == 40
+            assert p["low_corr_pool_frac"].default == 0.7
+        finally:
+            sys.path.pop(0)
+
+    def test_calibrate_noise_hi_default(self):
+        sys.path.insert(0, str(PIPELINE))
+        try:
+            import importlib
+            s1 = importlib.import_module("step_1_generate_decoy")
+            import inspect
+            sig = inspect.signature(s1.calibrate_noise)
+            assert sig.parameters["hi"].default == 0.8
+        finally:
+            sys.path.pop(0)
+
+
+# ── Fix 7: step_3_audit.py graceful guard ────────────────────────────────────
+
+class TestStep3AuditGuard:
+    """step_3_audit.py must not crash with a traceback when competitions/ is absent."""
+
+    def test_no_traceback_without_competitions_dir(self):
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, str(STEP3)],
+            capture_output=True, text=True,
+            env={**os.environ, "AMBIG_PIPELINE_ROOT": str(PIPELINE)},
+        )
+        assert result.returncode != 0, "Should exit non-zero without competitions/"
+        assert "ERROR" in result.stderr, "Should print a clear error message"
+        assert "Traceback" not in result.stderr, (
+            "Should not crash with a traceback — should give a clear error instead"
+        )
+
+
+# ── Fix 8: dsbench_51_tasks.csv exists and is valid ─────────────────────────
+
+class TestTasksCSV:
+    """dsbench_51_tasks.csv must ship all 51 tasks with the required columns."""
+
+    def test_csv_exists(self):
+        assert TASKS_CSV.exists(), "dsbench_51_tasks.csv not found in pipeline dir"
+
+    def test_csv_has_51_tasks(self):
+        import csv
+        with open(TASKS_CSV) as f:
+            rows = list(csv.DictReader(f))
+        assert len(rows) == 51, f"Expected 51 tasks, got {len(rows)}"
+
+    def test_csv_has_required_columns(self):
+        import csv
+        with open(TASKS_CSV) as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+        for col in ("task", "target_name", "target_type"):
+            assert col in headers, f"Missing required column: {col}"
+
+    def test_csv_target_types_valid(self):
+        import csv
+        with open(TASKS_CSV) as f:
+            for row in csv.DictReader(f):
+                assert row["target_type"] in ("classification", "regression"), (
+                    f"Invalid target_type for {row['task']}: {row['target_type']}"
+                )
+
+
+# ── Fix 9: README references CSV and Appendix C ─────────────────────────────
+
+class TestReadmeNewReferences:
+    """README must reference dsbench_51_tasks.csv and note Appendix C differences."""
+
+    @pytest.fixture(scope="class")
+    def readme_text(self):
+        return README.read_text()
+
+    def test_csv_referenced(self, readme_text):
+        assert "dsbench_51_tasks.csv" in readme_text, (
+            "README should reference the shipped dsbench_51_tasks.csv"
+        )
+
+    def test_appendix_c_note(self, readme_text):
+        assert "Appendix C" in readme_text, (
+            "README should note that Appendix C shows an abbreviated prompt"
+        )

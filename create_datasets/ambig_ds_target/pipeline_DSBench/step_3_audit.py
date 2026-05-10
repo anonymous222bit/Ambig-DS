@@ -316,6 +316,15 @@ def check_one(slug: str) -> dict:
 
 
 def main() -> int:
+    if not COMP.is_dir():
+        print(
+            f"ERROR: competitions directory not found: {COMP}\n"
+            f"This script audits the kaggle_2026 wave layout.\n"
+            f"Set AMBIG_PIPELINE_ROOT to the directory containing competitions/,\n"
+            f"or skip this step for dsbench-only repros (see README).",
+            file=__import__("sys").stderr,
+        )
+        return 1
     slugs = sorted(p.name for p in COMP.iterdir() if p.is_dir())
     print(f"Auditing {len(slugs)} tasks under {COMP}\n")
 

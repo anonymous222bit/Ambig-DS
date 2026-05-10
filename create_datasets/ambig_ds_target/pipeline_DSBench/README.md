@@ -112,9 +112,9 @@ SLUGS="bike-sharing-demand"
 ### 1. Generate calibrated decoy CSVs + manifest
 
 The task spec CSV must contain at minimum `task`, `target_name`, and
-`target_type` columns. A pre-built spec covering all 51 DSBench tasks
-can be extracted from the HF release's `tasks.csv` + per-task manifests,
-or you can write one by hand for the slugs you need:
+`target_type` columns. A pre-built spec covering all 51 DSBench tasks is
+shipped in this directory as [`dsbench_51_tasks.csv`](dsbench_51_tasks.csv).
+For a quick single-task test you can also write one by hand:
 
 ```bash
 SPEC=$WORKSPACE/_tasks.csv
@@ -176,6 +176,12 @@ setup (the agent must spontaneously detect ambiguity). The validator
 correspondingly flags any disclosure phrase (`candidate target`,
 `decoy`, `ambiguous`, …) and any uncited numeric fact. Warnings printed
 to stdout are advisory; the file is still written.
+
+> **Note on Appendix C:** The paper's Appendix C shows an abbreviated,
+> JSON-returning version of the rewrite prompt for readability. The full
+> production prompt is the `SYSTEM_PROMPT` string at the top of
+> `step_2_generate_ambig_prompts.py` (10 numbered rules, plain-text output).
+> Both produce equivalent results; the code version is canonical.
 
 ### 3b. (Optional) Verify the ambig prompt (LLM judge)
 

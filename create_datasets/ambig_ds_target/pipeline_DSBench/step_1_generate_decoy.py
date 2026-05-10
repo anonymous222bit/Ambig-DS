@@ -165,9 +165,9 @@ def per_feature_abs_spearman(X, y, target_type, max_rows=50_000, seed=0):
 
 def build_decoy(X_num, y, target_type, seed,
                 low_corr_pool_size=None,
-                low_corr_pool_frac=0.5,
-                pool_min=3,
-                pool_max=10):
+                low_corr_pool_frac=0.7,
+                pool_min=4,
+                pool_max=40):
     """Construct a decoy column with the same marginal distribution as `y`,
     that is feature-predictable but mostly orthogonal to `y`.
 
@@ -267,7 +267,7 @@ def partial_shuffle(val_2, frac, seed):
 
 def calibrate_noise(val_2_raw, X_num, y_true, target_type, seed,
                     cv_true, cv_tolerance, max_cv_rows,
-                    n_steps=8, lo=0.0, hi=0.5):
+                    n_steps=8, lo=0.0, hi=0.8):
     """Bisect noise level so that |cv(decoy) - cv_true| <= cv_tolerance.
 
     Returns (val_2_calibrated, chosen_level, cv_decoy_at_chosen,
@@ -829,18 +829,20 @@ def process_task(task_row, args, master_rng):
     decoy_col = "val_2" if truth_first else "val_1"
 
     # ---- assemble output frames -----------------------------------------
-    out_train = pd.DataFrame({idcol: train[idcol].values})
+    train_cols = {idcol: train[idcol].values}
     for orig, anon in zip(feat_cols, anon_feat_cols):
-        out_train[anon] = train[orig].values
-    out_train[truth_col] = y_tr
-    out_train[decoy_col] = val_2
+        train_cols[anon] = train[orig].values
+    train_cols[truth_col] = y_tr
+    train_cols[decoy_col] = val_2
     # canonical column order: id, features..., val_1, val_2
-    out_train = out_train[[idcol] + anon_feat_cols + ["val_1", "val_2"]]
+    out_train = pd.DataFrame(train_cols)[
+        [idcol] + anon_feat_cols + ["val_1", "val_2"]
+    ]
 
-    out_test = pd.DataFrame({idcol: test[idcol].values})
+    test_cols = {idcol: test[idcol].values}
     for orig, anon in zip(feat_cols, anon_feat_cols):
-        out_test[anon] = test[orig].values
-    out_test = out_test[[idcol] + anon_feat_cols]
+        test_cols[anon] = test[orig].values
+    out_test = pd.DataFrame(test_cols)[[idcol] + anon_feat_cols]
 
     # ---- write everything -----------------------------------------------
     task_dir = Path(args.out_root) / "data" / task
