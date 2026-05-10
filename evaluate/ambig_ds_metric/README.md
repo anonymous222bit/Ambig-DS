@@ -231,14 +231,14 @@ Two ask policies are supported, mirroring the paper:
 - **Permissive** (default): `CLARIFY_PROTOCOL` — agent *may* ask one question.
 - **Conservative** (`--strict-protocol`): `STRICT_CLARIFY_PROTOCOL` — agent
   asks only if the task cannot be solved from prompt + data; unnecessary
-  clarification is penalized. Verbatim from the paper's
-  `run_metric_ambig_mle_clarify.py`.
+  clarification is penalized. Identical to the `STRICT_CLARIFY_PROTOCOL`
+  constant in `step_3_run_agent_clarify.py`.
 
 #### Clarify-only mode (`--clarify-only`)
 
 Run **only** Phase A (ask) + Phase B (answer). Skips Phase C (solve), so no
-submission is produced and no grading happens. Mirrors the paper's
-`run_metric_ambig_mle_ask_only.py`. Output per slug: `_clarify.json` only.
+submission is produced and no grading happens. Equivalent to running
+`step_3_run_agent_clarify.py --clarify-only`. Output per slug: `_clarify.json` only.
 
 #### Run all 4 ask conditions (clarify-only)
 
@@ -248,7 +248,7 @@ names keep them in separate result dirs so they don't collide:
 
 ```bash
 MODEL=<agent-model-id>
-ANSW=anthropic_claude_haiku_4_5_v1_0
+ANSW=anthropic_claude_haiku_4_6
 
 for VARIANT in full ambig_metric; do
   for POLICY in "" "--strict-protocol"; do
@@ -610,7 +610,6 @@ python step_2_run_agent.py \
   --variant {full|ambig_metric} \
   --model gemini_3_flash \
   --tasks spooky-author-identification \
-  --agent opencode \
   --agent-bin "$HOME/.npm-global/bin/opencode" \
   --base-url "$OPENAI_BASE_URL" \
   --timeout 1200
@@ -622,4 +621,75 @@ python step_2_run_agent.py \
 |---|---|---|---|---|
 | `full` | `spooky-author-identification` | 0.64553 | ✓ | Intended |
 | `ambig_metric` | `spooky-author-identification` | 0.57341 | ✓ | Intended |
+
+---
+
+## Reproducing the paper's results
+
+The defaults in each script are tuned for **smoke tests** (e.g. 600 s
+timeout, single-judge call). The numbers in the paper were produced
+with the flags below.
+
+### Timeout
+
+The paper reports a **24 h wall-clock budget** per task on Ambig-DS-M
+(Objective). Pass `--timeout 86400` to `step_2_run_agent.py` and
+`step_3_run_agent_clarify.py`.
+
+### Judge calls
+
+The paper uses **five independent LLM-judge calls with majority vote**.
+Pass `--n-judges 5` to `step_4_judge_audit.py` (the default is 1).
+
+### Oracle / answerer model
+
+The paper uses **Claude Haiku 4.6** as the clarification oracle.
+Pass `--answerer-model anthropic_claude_haiku_4_6` to
+`step_3_run_agent_clarify.py` (the default is `gpt-4o-mini`).
+
+### Full reproduction recipe
+
+```bash
+MODEL=<model-id>                    # e.g. gemini_3_flash
+ANSW=anthropic_claude_haiku_4_6     # paper's oracle
+JUDGE=<judge-model-id>              # e.g. gemini_3_flash
+BENCH=./benchmark
+
+# Step 1 — setup (once)
+python step_1_setup_benchmark.py --benchmark-dir "$BENCH"
+
+# Step 2 — Full + Ambig
+for V in full ambig_metric; do
+  python step_2_run_agent.py \
+    --benchmark-dir "$BENCH" --variant "$V" --model "$MODEL" \
+    --timeout 86400 --skip-existing
+done
+
+# Step 3 — Ask (clarify)
+python step_3_run_agent_clarify.py \
+  --benchmark-dir "$BENCH" --variant ambig_metric --model "$MODEL" \
+  --answerer-model "$ANSW" --timeout 86400 --skip-existing
+
+# Step 4 — Judge audit (5-call majority vote)
+python step_4_judge_audit.py \
+  --benchmark-dir "$BENCH" --judge-model "$JUDGE" \
+  --agent-models "$MODEL" \
+  --conditions full,ambig_metric,ambig_metric+clarify \
+  --n-judges 5
+
+# Normalize scores
+python normalize_scores.py --benchmark-dir "$BENCH" \
+  --results-root "$BENCH/results" --agent opencode --model "$MODEL" \
+  --variants full,ambig_metric,ambig_metric_clarify
+```
+
+### Agent models evaluated in the paper
+
+| Paper name | CLI `--model` value |
+|---|---|
+| Gemini 3 Flash | `gemini_3_flash` |
+| GPT-5.4 Nano | `gpt_5_4_nano` |
+| Claude Haiku 4.5 | `anthropic_claude_haiku_4_5_v1_0` |
+| Gemini 3.1 Pro | `gemini_3_1_pro` |
+| GPT-5.4 | `gpt_5_4` |
 

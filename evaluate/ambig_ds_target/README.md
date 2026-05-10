@@ -188,7 +188,7 @@ produces the submission.
 python step_5_run_agent_clarify.py --benchmark-dir ./benchmark \
     --variant ambig_target \
     --model anthropic_claude_haiku_4_5_v1_0 \
-    --answerer-model anthropic_claude_haiku_4_5_v1_0
+    --answerer-model anthropic_claude_haiku_4_6
 ```
 
 Flags mirror step 4 plus `--answerer-model` and `--ask-timeout`.
@@ -221,7 +221,7 @@ names keep them in separate result dirs so they don't collide:
 
 ```bash
 MODEL=gemini_3_flash
-ANSW=anthropic_claude_haiku_4_5_v1_0
+ANSW=anthropic_claude_haiku_4_6
 
 for VARIANT in full ambig_target; do
   for POLICY in "" "--strict-protocol"; do

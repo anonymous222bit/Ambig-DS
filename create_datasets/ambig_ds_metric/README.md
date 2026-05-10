@@ -1,5 +1,8 @@
 # Ambig-DS-M — Dataset Creation Pipeline
 
+> **Paper ↔ code naming:** The paper uses *Ambig-DS-Objective*; the code
+> and HuggingFace use *Ambig-DS-M*.
+
 This directory builds the **Ambig-DS-M** dataset: 61 Kaggle competition
 prompts each available in two variants — `full` (original) and
 `ambig_metric` (evaluation metric redacted) — together with a

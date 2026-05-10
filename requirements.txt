@@ -1,0 +1,12 @@
+# Core pipeline dependencies
+openai>=1.0
+huggingface_hub>=0.24
+pandas>=2.0
+numpy
+scipy
+scikit-learn
+certifi
+py7zr
+
+# MLE-bench (metric evaluator) — install separately:
+#   GIT_LFS_SKIP_SMUDGE=1 pip install -e git+https://github.com/openai/mle-bench.git#egg=mlebench

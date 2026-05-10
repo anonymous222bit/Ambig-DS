@@ -28,7 +28,7 @@ Prerequisites:
 Usage:
     python step_5_run_agent_clarify.py --benchmark-dir ./benchmark \\
         --variant ambig_target --model anthropic_claude_haiku_4_5_v1_0 \\
-        --answerer-model anthropic_claude_haiku_4_5_v1_0
+        --answerer-model anthropic_claude_haiku_4_6
 """
 from __future__ import annotations
 

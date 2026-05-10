@@ -1,5 +1,8 @@
 # Ambig-DS-T: Target-Ambiguity Benchmark for Tabular Data Science
 
+> **Paper ↔ code naming:** The paper uses *Ambig-DS-Target*; the code
+> and HuggingFace use *Ambig-DS-T*.
+
 `Ambig-DS-T` is a benchmark for evaluating how language models behave under
 **target ambiguity** — when the prompt does not unambiguously identify which
 column of a tabular dataset to predict. Every task ships in two arms:
