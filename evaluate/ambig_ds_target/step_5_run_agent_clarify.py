@@ -341,6 +341,11 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
         (out_task / "_shape.json").write_text(json.dumps(
             {"error": "no submission found"}, indent=2))
         report = {"error": "no submission found", "submission_exists": False}
+
+    # Ensure invalid / errored runs score 0 and remain in the denominator.
+    report.setdefault("score", 0)
+    report.setdefault("score_rpg", 0.0)
+
     grade_file.write_text(json.dumps(report, indent=2, default=str))
 
     log.update({

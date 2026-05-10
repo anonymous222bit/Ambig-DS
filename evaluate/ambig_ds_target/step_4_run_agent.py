@@ -300,7 +300,7 @@ def grade(sub_path: Path, slug: str, benchmark_dir: Path,
         "submission_file": str(sub_path),
     }
     # RPG normalization (Relative Performance Gap):
-    #   max((p - b) / (g - b), 0)
+    #   clip(max((p - b) / (g - b), 0), 0, 1)
     # where g = best-known (DSBench save_performance/GT/<slug>/result.txt),
     #       b = baseline   (DSBench save_performance/baseline/<slug>/result.txt).
     # Stored in _grade.json so step_6_aggregate.py can macro-average without
@@ -313,7 +313,7 @@ def grade(sub_path: Path, slug: str, benchmark_dir: Path,
             b = float(bl_p.read_text().strip().splitlines()[0])
             denom = g - b
             if denom != 0:
-                rpg = max((score - b) / denom, 0.0)
+                rpg = min(max((score - b) / denom, 0.0), 1.0)
                 out["score_rpg"] = rpg
                 out["rpg_baseline"] = b
                 out["rpg_gt"] = g
@@ -399,6 +399,12 @@ def run_one(slug: str, variant: str, model: str, args, run_dir: Path,
         (out_task / "_shape.json").write_text(json.dumps(
             {"error": "no submission found"}, indent=2))
         report = {"error": "no submission found", "submission_exists": False}
+
+    # Ensure invalid / errored runs score 0 and remain in the denominator
+    # for macro-averaging (paper methodology: "Invalid and Timeout runs
+    # score 0 and remain in the denominator").
+    report.setdefault("score", 0)
+    report.setdefault("score_rpg", 0.0)
 
     grade_file.write_text(json.dumps(report, indent=2, default=str))
 
