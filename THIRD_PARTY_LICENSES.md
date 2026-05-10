@@ -14,7 +14,7 @@ Source: <https://github.com/LiqiangJing/DSBench>
 Used in: target-ambiguity benchmark construction (`create_datasets/ambig_ds_target/pipeline_DSBench/`),
 target-ambiguity evaluator (`evaluate/ambig_ds_target/`, including per-task
 `eval.py` files redistributed in the `Ambig-DS-T` HF dataset), and the
-50 base tabular tasks underlying Ambig-DS-T.
+51 base tabular tasks underlying Ambig-DS-T.
 
 License (code): MIT.
 

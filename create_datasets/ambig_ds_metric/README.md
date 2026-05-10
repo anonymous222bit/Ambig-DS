@@ -40,6 +40,17 @@ create_datasets/ambig_ds_metric/
 | 2    | `<bench>/prompts/<slug>/{full,ambig_metric}.md` + manifest | `<bench>/_verify/<slug>.json`, `_summary.json`, `rejected.txt`                         |
 | 3    | `<bench>/` (everything except `data/`) + `_verify/`        | local staging dir + `https://huggingface.co/datasets/<repo-id>` (when `--upload`)      |
 
+**Manifest path load order:** Steps 1 and 2 check
+`<bench>/prompts/_metric_manifest.json` first, then fall back to
+`<bench>/metric_manifest.json`. Step 1 always *writes* to
+`<bench>/metric_manifest.json`.
+
+**Metrics CSV load order:** Step 1 looks for `mle_bench_metrics_raw.csv`,
+then `metrics_classified.csv`. Step 3 looks for
+`mle_bench_metrics_classified.csv`, then `metrics_classified.csv`. These
+CSVs are optional grader metadata and are not required for prompt
+generation.
+
 `<bench>` is the working benchmark directory created by
 `evaluate/ambig_ds_metric/step_1_setup_benchmark.py` (Step 1 of the eval
 pipeline pulls the prompts from HuggingFace). From this directory, that
@@ -98,6 +109,11 @@ prints a warning so the slug can be re-generated with a higher cap.
 
 **Output:** `<bench>/prompts/<slug>/ambig_metric.md` for every slug in
 `task_list.txt`.
+
+> **Note:** Step 1 iterates all subdirectories under `prompts/`, not
+> `task_list.txt`. It will process any slug directory that has a `full.md`.
+> Filtering to the canonical task set happens in Step 2, which reads
+> `task_list.txt`.
 
 ### Step 2 — `step_2_llm_verify.py`
 
