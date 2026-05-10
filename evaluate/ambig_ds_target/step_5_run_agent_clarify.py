@@ -210,6 +210,7 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
         elapsedA = 0.0
         timed_out_A = False
         question = ""
+        question_truncated = False
         asked = False
     else:
         t0 = time.time()
@@ -225,6 +226,11 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
                 question = qfile.read_text().strip()
             except Exception:
                 question = ""
+        # Enforce the 50-word limit stated in the clarify protocol.
+        words = question.split()
+        question_truncated = len(words) > 50
+        if question_truncated:
+            question = " ".join(words[:50])
         asked = bool(question) and question.strip().upper() != "NONE"
 
     # ---------- Phase B: ANSWER ----------
@@ -254,6 +260,7 @@ def run_one_clarify(slug: str, variant: str, model: str, args, run_dir: Path,
         "slug": slug, "variant": variant, "model": model,
         "answerer_model": args.answerer_model,
         "asked": asked, "refused": refused,
+        "question_truncated": question_truncated,
         "answerer_error": answerer_error,
         "question": question, "answer": answer_text,
         "ask_iters": itersA, "ask_time_sec": round(elapsedA, 1),

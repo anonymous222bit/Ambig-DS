@@ -300,3 +300,84 @@ class TestIssue11_NoClaw:
         sig = inspect.signature(default_bin)
         assert len(sig.parameters) == 0, \
             f"default_bin should take no args: {sig}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fix 6.1: opencode.json contains _NOTE marking it as a reference sample
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestFix6_1_OpencodeJsonNote:
+    """The static opencode.json files should contain a _NOTE field."""
+
+    def test_metric_opencode_json_has_note(self):
+        cfg = json.loads((EVAL_DIR / "opencode.json").read_text())
+        assert "_NOTE" in cfg, "opencode.json should contain a _NOTE field"
+        assert "reference" in cfg["_NOTE"].lower() or "sample" in cfg["_NOTE"].lower()
+
+    def test_target_opencode_json_has_note(self):
+        target_json = EVAL_DIR.parent / "ambig_ds_target" / "opencode.json"
+        if not target_json.exists():
+            pytest.skip("target opencode.json not present")
+        cfg = json.loads(target_json.read_text())
+        assert "_NOTE" in cfg, "target opencode.json should contain a _NOTE field"
+
+    def test_runtime_config_has_no_note(self):
+        """The runtime template in agents.py should NOT have _NOTE (it's injected at runtime)."""
+        from agents import _OPENCODE_CONFIG_TEMPLATE
+        assert "_NOTE" not in _OPENCODE_CONFIG_TEMPLATE
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Fix 6.2: 50-word question truncation enforced in step_3_run_agent_clarify.py
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestFix6_2_QuestionTruncation:
+    """The 50-word limit in the clarify protocol must be enforced in code."""
+
+    def test_truncation_code_present_metric(self):
+        """step_3_run_agent_clarify.py should contain truncation logic."""
+        src = (EVAL_DIR / "step_3_run_agent_clarify.py").read_text()
+        assert "words[:50]" in src, "50-word truncation should be in metric clarify script"
+
+    def test_truncation_code_present_target(self):
+        """step_5_run_agent_clarify.py should contain truncation logic."""
+        target_script = EVAL_DIR.parent / "ambig_ds_target" / "step_5_run_agent_clarify.py"
+        if not target_script.exists():
+            pytest.skip("target clarify script not present")
+        src = target_script.read_text()
+        assert "words[:50]" in src, "50-word truncation should be in target clarify script"
+
+    def test_question_truncated_field_in_clarify_json(self):
+        """_clarify.json output should include question_truncated field."""
+        src = (EVAL_DIR / "step_3_run_agent_clarify.py").read_text()
+        assert "question_truncated" in src, \
+            "question_truncated should be recorded in _clarify.json"
+
+    def test_truncation_logic_correct(self):
+        """Simulate the truncation logic directly."""
+        # Under 50 words — no truncation
+        short = "What metric should I optimize for this task?"
+        words = short.split()
+        assert len(words) <= 50
+        truncated = len(words) > 50
+        assert not truncated
+        result = " ".join(words[:50]) if truncated else short
+        assert result == short
+
+        # Over 50 words — truncated
+        long_q = " ".join(f"word{i}" for i in range(80))
+        words = long_q.split()
+        assert len(words) == 80
+        truncated = len(words) > 50
+        assert truncated
+        result = " ".join(words[:50])
+        assert len(result.split()) == 50
+        assert result.endswith("word49")
+
+    def test_exactly_50_words_not_truncated(self):
+        """Exactly 50 words should NOT be truncated."""
+        q = " ".join(f"w{i}" for i in range(50))
+        words = q.split()
+        assert len(words) == 50
+        truncated = len(words) > 50
+        assert not truncated

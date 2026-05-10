@@ -1,4 +1,5 @@
 {
+  "_NOTE": "Reference sample only. At runtime, agents.py generates a fresh opencode.json per workspace with the actual model id injected. This file is never read by the pipeline.",
   "$schema": "https://opencode.ai/config.json",
   "provider": {
     "custom": {
