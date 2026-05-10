@@ -18,6 +18,12 @@
 #   OPENAI_API_KEY   required
 #   OPENAI_BASE_URL  optional (defaults to https://api.openai.com/v1)
 #   AGENT_BIN        optional path to the opencode binary (default: auto-detect)
+#   RUN_CLARIFY      set to 1 to enable Step 3 (clarify pipeline)
+#   RUN_JUDGE        set to 1 to enable Step 4 (LLM-judge audit)
+#   ANSWERER_MODEL   oracle model for clarify (default: gpt-4o-mini)
+#   TIMEOUT          solve-phase timeout in seconds (default: 1800)
+#   ASK_TIMEOUT      ask-phase timeout in seconds (default: 120)
+#   N_JUDGES         number of independent judge calls (default: 1; paper uses 5)
 
 set -euo pipefail
 
@@ -96,16 +102,46 @@ echo "[3/3] Running agent on AMBIG_METRIC variant..."
   --base-url "$BASE_URL" \
   --skip-existing
 
-# ── Step 5: (optional) LLM-judge what metric the agent optimized ──
-# Uncomment to run the judge audit.
-#
-# echo
-# echo "[4] (optional) Judging agent optimization targets..."
-# "$PY" "$HERE/step_4_judge_audit.py" \
-#   --benchmark-dir "$BENCH_DIR" \
-#   --judge-model "$MODEL" \
-#   --agent-models "$MODEL" \
-#   --conditions full,ambig_metric
+# ── Step 5: (optional) Clarify run ────────────────────────────
+# Set RUN_CLARIFY=1 to enable the ask-then-solve (clarify) pipeline.
+ANSW_MODEL="${ANSWERER_MODEL:-gpt-4o-mini}"
+TIMEOUT="${TIMEOUT:-1800}"
+ASK_TIMEOUT="${ASK_TIMEOUT:-120}"
+
+if [[ "${RUN_CLARIFY:-0}" == "1" ]]; then
+  echo
+  echo "[4/5] Running agent on AMBIG_METRIC variant with clarify..."
+  "$PY" "$HERE/step_3_run_agent_clarify.py" \
+    --benchmark-dir "$BENCH_DIR" \
+    --variant ambig_metric \
+    --model "$MODEL" \
+    --answerer-model "$ANSW_MODEL" \
+    --tasks "$TASKS" \
+    --agent-bin "$AGENT_BIN" \
+    --base-url "$BASE_URL" \
+    --timeout "$TIMEOUT" \
+    --ask-timeout "$ASK_TIMEOUT" \
+    --skip-existing
+fi
+
+# ── Step 6: (optional) LLM-judge what metric the agent optimized ──
+# Set RUN_JUDGE=1 to enable the judge audit.
+N_JUDGES="${N_JUDGES:-1}"
+
+if [[ "${RUN_JUDGE:-0}" == "1" ]]; then
+  echo
+  echo "[5/5] Judging agent optimization targets (n_judges=$N_JUDGES)..."
+  CONDITIONS="full,ambig_metric"
+  if [[ "${RUN_CLARIFY:-0}" == "1" ]]; then
+    CONDITIONS="full,ambig_metric,ambig_metric+clarify"
+  fi
+  "$PY" "$HERE/step_4_judge_audit.py" \
+    --benchmark-dir "$BENCH_DIR" \
+    --judge-model "$MODEL" \
+    --agent-models "$MODEL" \
+    --conditions "$CONDITIONS" \
+    --n-judges "$N_JUDGES"
+fi
 
 echo
 echo "=========================================================="

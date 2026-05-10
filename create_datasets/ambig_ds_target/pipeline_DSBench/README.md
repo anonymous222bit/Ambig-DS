@@ -38,7 +38,7 @@ it is imported by step 2.
 
 For each task, we construct the decoy in two steps (paper §4.2):
 
-> **(i) Rank-mapping.** Select the 3–10 anonymized features with the lowest
+> **(i) Rank-mapping.** Select the 4–40 anonymized features with the lowest
 > absolute Spearman correlation to the true target, standardize each, sum
 > them per row to get a synthetic score, rank-map the true-target marginal
 > onto that score.
@@ -265,7 +265,7 @@ per slug in a loop).
 | `--pool_frac`              | 0.7   | take the bottom 70% of features by `|Spearman(feature, y)|` |
 | `--apply_dtype_snap`       | off   | pass `--apply_dtype_snap` to snap the noised decoy back to the truth's dtype (e.g. int 0/1) |
 
-Per the paper, **39 of 51** retained tasks meet the 0.02 gap criterion; the
+Per the paper, **29 of 51** retained tasks meet the 0.02 gap criterion; the
 rest fall back to the closest candidate that still passes the marginal-match
 and low-correlation filters. Expect a similar pass rate on new tasks.
 

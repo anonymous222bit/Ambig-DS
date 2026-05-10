@@ -1,4 +1,4 @@
-# DSBench — Ambiguity Benchmarks for ML-Engineering Agents
+# Ambig-DS — Ambiguity Benchmarks for Data-Science Agents
 
 This repository contains two benchmarks for evaluating coding agents on
 data-science tasks under **prompt ambiguity**, plus the pipelines that
@@ -12,12 +12,16 @@ build them and the evaluators that run agents against them.
 Each task ships in two arms: `full` (original prompt) and
 `ambig_metric` / `ambig_target` (rewritten with the relevant signal removed).
 
+> **Paper ↔ code naming:** The paper uses *Ambig-DS-Objective* and
+> *Ambig-DS-Target*; the code and HuggingFace use *Ambig-DS-M* and
+> *Ambig-DS-T*; CLI variant flags are `ambig_metric` / `ambig_target`.
+
 ---
 
 ## Repository layout
 
 ```
-DSBench/
+Ambig-DS/
 ├── create_datasets/              # build the HF datasets
 │   ├── ambig_ds_metric/pipeline/                  # 3-step metric pipeline
 │   └── ambig_ds_target/pipeline_DSBench/          # 5-step target pipeline
@@ -118,7 +122,7 @@ python step_1_setup_benchmark.py --benchmark-dir ./benchmark \
 python step_2_run_agent.py --benchmark-dir ./benchmark \
     --variant ambig_metric --model <model-id> \
     --tasks spooky-author-identification \
-    --agent opencode --agent-bin "$HOME/.npm-global/bin/opencode"
+    --agent-bin "$HOME/.npm-global/bin/opencode"
 
 # Target track
 cd ../ambig_ds_target
