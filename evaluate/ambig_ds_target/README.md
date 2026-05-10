@@ -243,7 +243,6 @@ for VARIANT in full ambig_target; do
         --variant "$VARIANT" \
         --model "$MODEL" \
         --answerer-model "$ANSW" \
-        --agent opencode \
         --clarify-only $POLICY \
         --skip-existing
   done
