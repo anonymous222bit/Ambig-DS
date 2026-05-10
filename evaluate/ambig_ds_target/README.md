@@ -95,6 +95,19 @@ export OPENAI_API_KEY=...
 export OPENAI_BASE_URL=...   # or any OAI-compatible
 ```
 
+### Reproducing paper results
+
+The paper's reported numbers use the following model configuration:
+
+| Role | Model | How to set |
+|------|-------|------------|
+| Prompt generation (create\_datasets) | Claude Opus 4.7 | `AMBIG_LLM_MODEL=anthropic_claude_opus_4_7` in `.env` |
+| Clarification oracle (step 5 answerer) | Claude Haiku 4.6 | `--answerer-model anthropic_claude_haiku_4_6` |
+| Evaluated agent backbones | Gemini 3 Flash, GPT-5.4 Nano, Claude Haiku 4.5, Gemini 3.1 Pro, GPT-5.4 | `--model <id>` in steps 4/5 |
+
+Code defaults (e.g. `gpt-4o-mini` for generation) are development
+conveniences and will **not** reproduce the paper's tables.
+
 ---
 
 ## Step 1 — set up the benchmark
