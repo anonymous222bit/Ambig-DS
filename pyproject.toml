@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+# Use importlib import mode so identically-named tests/ directories in
+# different subtrees don't collide when running from the repo root.
+addopts = "--import-mode=importlib"
+
+# Exclude agent workspace artefacts that contain standalone scripts pytest
+# would otherwise try to collect.
+norecursedirs = ["benchmark", "workspaces"]

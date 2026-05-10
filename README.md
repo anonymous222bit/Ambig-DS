@@ -27,7 +27,7 @@ Ambig-DS/
 │   └── ambig_ds_target/pipeline_DSBench/          # 5-step target pipeline
 └── evaluate/                     # run agents + grade submissions
     ├── ambig_ds_metric/                           # 4-step metric evaluator (uses MLE-bench)
-    └── ambig_ds_target/                           # 5-step target evaluator (uses per-task DSBench eval.py)
+    └── ambig_ds_target/                           # 7-step target evaluator (uses per-task DSBench eval.py)
 ```
 
 Each subfolder has its own `README.md` with detailed steps and flags:

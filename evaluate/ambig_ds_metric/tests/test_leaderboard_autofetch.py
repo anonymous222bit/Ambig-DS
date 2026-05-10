@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 EVAL_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(EVAL_DIR))
+# sys.path setup is handled by conftest.py
 
 
 # ── LFS stub fixture ─────────────────────────────────────────────────────────

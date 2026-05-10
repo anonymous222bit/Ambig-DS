@@ -14,7 +14,7 @@ import pytest
 
 # ── Locate the evaluate/ambig_ds_metric directory ──
 EVAL_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(EVAL_DIR))
+# sys.path setup is handled by conftest.py
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
